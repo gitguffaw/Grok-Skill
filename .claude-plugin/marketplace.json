@@ -1,0 +1,42 @@
+{
+  "name": "grok-router",
+  "description": "Live model discovery, policy-backed Grok delegation, and review for Claude Code, Codex, and AGY.",
+  "version": "0.3.0",
+  "owner": {
+    "name": "gitguffaw"
+  },
+  "metadata": {
+    "description": "Grok Router plugin for live model discovery, policy-backed Grok delegation, and tracked jobs.",
+    "version": "0.3.0"
+  },
+  "plugins": [
+    {
+      "name": "grok-router",
+      "displayName": "Grok Router",
+      "description": "Route host-agent work through Grok with live discovery, policy-backed modes, and tracked jobs.",
+      "version": "0.3.0",
+      "author": { "name": "gitguffaw" },
+      "homepage": "https://github.com/gitguffaw/Grok-Skill#readme",
+      "repository": "https://github.com/gitguffaw/Grok-Skill",
+      "license": "Apache-2.0",
+      "keywords": ["grok", "xai", "claude-code", "agy", "models", "review", "delegation"],
+      "category": "development-tools",
+      "tags": ["grok", "models", "review", "automation", "agy"],
+      "source": "./plugins/grok-router"
+    },
+    {
+      "name": "grok-cli",
+      "displayName": "Grok CLI",
+      "description": "A single skill that teaches a host to drive the installed grok binary directly, with no companion runtime or job store.",
+      "version": "0.1.0",
+      "author": { "name": "gitguffaw" },
+      "homepage": "https://github.com/gitguffaw/Grok-Skill#minimal-grok-cli-skill",
+      "repository": "https://github.com/gitguffaw/Grok-Skill",
+      "license": "Apache-2.0",
+      "keywords": ["grok", "cli", "delegation"],
+      "category": "development-tools",
+      "tags": ["grok", "cli"],
+      "source": "./plugins/grok-cli"
+    }
+  ]
+}

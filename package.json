@@ -1,0 +1,33 @@
+{
+  "name": "@gitguffaw/grok-router",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "Route host-agent work through the local Grok CLI with live discovery, policy-backed modes, and tracked jobs.",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/gitguffaw/Grok-Skill#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gitguffaw/Grok-Skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gitguffaw/Grok-Skill/issues"
+  },
+  "keywords": [
+    "grok",
+    "xai",
+    "claude-code",
+    "codex",
+    "agy",
+    "antigravity",
+    "delegation",
+    "review"
+  ],
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "lint": "node --check plugins/grok-router/scripts/grok-companion.mjs && node --check plugins/grok-router/scripts/grok-router-mcp.mjs"
+  }
+}

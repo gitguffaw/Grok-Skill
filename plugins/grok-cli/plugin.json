@@ -1,0 +1,5 @@
+{
+  "name": "grok-cli",
+  "version": "0.1.0",
+  "description": "Teach a host to drive the installed grok binary directly, without Router jobs."
+}

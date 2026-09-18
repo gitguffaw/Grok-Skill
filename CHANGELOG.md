@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+- Claude Code and Codex remain the plugin hosts. `setup` copies `grok-router-review.rhai` and `grok-router-adversarial-review.rhai` to `~/.grok/workflows/` for Grok TUI `/workflow`.
+
+## 0.3.0
+
+- Kill inner-parent Parallel: `--parallel` / `--panel` / `--lanes` now launch N `grok -p --no-subagents` leaves. Companion merges json-schema findings into one bounded report. `result --lane k` fetches a leaf. Nested fan-out refused (`GROK_ROUTER_NESTING`).
+- Grok-as-host: `setup` copies `grok-router-review.rhai` and `grok-router-adversarial-review.rhai` to `~/.grok/workflows/`. Use `/workflow grok-router-review`. Do not install grok-router MCP/skill into a Grok session.
+- See `docs/grok-host.md` and `policy/Grok/Workflows/Parallel.md`.
+
+## 0.2.0
+
+- Router-owned `--lean` (opt-in) / `--full`. Not a Grok flag. Live probe: `--system-prompt-override` replaces `system_prompt.txt` but house `Agents.md` still appears in `prompt_context.json`, so review does **not** default to lean.
+- Lean bundle emits `--disallowed-tools search_tool,use_tool,Agent` (allowlist alone does not drop MCP meta-tools), `--disable-web-search`, `--no-subagents`, `--no-plan`, `GROK_MEMORY=0`, and a short `--system-prompt-override` on read-only modes. `--search` keeps web tools. `--parallel` conflicts with `--lean`.
+- Review/adversarial-review send the prompt via `--prompt-file` and constrain findings with `--json-schema` (`.structuredOutput`).
+- Read-only jobs that dirty git status complete as `completed-with-warnings`.
+- `setup` / `models` report inspect load (instruction tokens, skills, plugins, MCP, hooks).
+- Probe notes: `docs/lean-probe.md`.
+
+## 0.1.0
+
+- Turn the markdown Grok skill into **Grok Router**: a companion runtime (`grok-companion.mjs`) with Claude Code slash commands, Codex MCP tools, and an AGY skill.
+- Live discovery from `grok --help`, `grok models`, and `grok inspect --json`. No pinned model ids or effort enums.
+- Managed modes: `setup`, `models`, `surface`, `help`, `analyze`, `exec`, `review`, `adversarial-review`, `rescue`, `status`, `result`, `cancel`, `cli`.
+- Read-only modes use `--tools "read_file,grep,list_dir"`; exec uses `--always-approve`. Review embeds a git diff (Grok has no native review subcommand).
+- New Grok flags/commands appear on `surface` the same day the binary updates; unmodeled subcommands go through `cli`.
+- Keep a thin `grok-cli` plugin for raw `grok -p` without job tracking.
+
+## v1.0.8 notes (skill era)
+
 - LaunchPatterns Multi-Turn and CI now split writing (`--always-approve`) from findings-only (`--tools "read_file,grep,list_dir"`). Repeat those flags on every turn; `--resume` does not inherit them.
 - Session DEFAULT LAUNCH points at that Multi-Turn module instead of a write-capable copy-paste spine.
 

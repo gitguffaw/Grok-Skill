@@ -1,0 +1,11 @@
+{
+  "name": "grok-router",
+  "version": "0.3.0",
+  "description": "Route host-agent work through the local Grok CLI with live discovery, policy-backed modes, and tracked jobs.",
+  "author": {
+    "name": "gitguffaw"
+  },
+  "homepage": "https://github.com/gitguffaw/Grok-Skill#readme",
+  "repository": "https://github.com/gitguffaw/Grok-Skill",
+  "license": "Apache-2.0"
+}

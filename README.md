@@ -1,70 +1,79 @@
-# Grok Skill
+# Grok Router
 
-Teaches **Claude Code, Codex, Grok, or Google Antigravity** to drive the local **Grok CLI** through headless `grok -p`.
+Claude Code and Codex call Grok through a companion. You pick a mode. The companion builds `grok -p`. The chat agent does not invent flags, and it does not spawn ten inner agents.
 
-Clone this repo onto the host skill path. That directory is the skill (`SKILL.md`, `Workflows/`, `references/`).
+This replaces the old markdown skill named `Grok` (`grok -p` recipes in `SKILL.md`). If `~/.claude/skills/Grok` or `~/.codex/skills/Grok` still exists, remove it after you install the plugin. Do not install this plugin into Grok TUI.
 
-## Prerequisites
-
-1. Grok CLI installed: <https://x.ai/cli>
-2. Authenticated: `grok login`, or `XAI_API_KEY` for headless/CI
-3. `grok` on `PATH` where the host agent runs
-
-```bash
-grok --version
-grok -p "Reply with: Grok CLI is ready"
-```
+Needs Node 18.18+ and `grok` on `PATH`. Sign in with `grok login` or `XAI_API_KEY`.
 
 ## Install
 
-```bash
-git clone https://github.com/gitguffaw/Grok-Skill ~/.claude/skills/Grok
-ln -sfn ~/.claude/skills/Grok ~/.codex/skills/Grok
-ln -sfn ~/.claude/skills/Grok ~/.grok/skills/Grok
-mkdir -p ~/.gemini/config/skills
-ln -sfn ~/.claude/skills/Grok ~/.gemini/config/skills/Grok
+Claude Code:
+
+```
+/plugin marketplace add gitguffaw/Grok-Skill
+/plugin install grok-router@grok-router
+/reload-plugins
+/grok-router:setup
+/grok-router:models
 ```
 
-If `~/.claude/skills/Grok` already exists, rename or remove it first.
+From a local clone, marketplace-add the checkout path instead of the GitHub slug.
 
-Start a new host-agent session after installing.
+Codex: install the same plugin and use the `grok_router_*` MCP tools. Same companion. Do not shell out to raw `grok -p` unless the user asked for the `grok-cli` skill.
 
-| Host | Skill path |
-|------|------------|
-| Claude Code | `~/.claude/skills/Grok` |
-| Codex | `~/.codex/skills/Grok` → Claude |
-| Grok | `~/.grok/skills/Grok` → Claude |
-| Antigravity global | `~/.gemini/config/skills/Grok` → Claude |
-| Antigravity workspace | `<workspace>/.agents/skills/Grok` |
+## Commands
 
-## Upgrade
+| Want | Command | Writes |
+| --- | --- | --- |
+| Facts, diagnosis | `/grok-router:analyze` | No |
+| A bounded change | `/grok-router:exec` | Yes |
+| Bugs in the current diff | `/grok-router:review` | No |
+| Challenge the design | `/grok-router:adversarial-review` | No |
+| Hand Grok a problem | `/grok-router:rescue` | Fix yes, diagnosis no |
+| What this binary can do | `:models` `:surface` `:help` | No |
+| Jobs | `:status` `:result` `:cancel` | Cancel only |
+| Unmodeled `grok` argv | `:cli` | Depends |
 
-```bash
-cd ~/.claude/skills/Grok
-git pull
+Foreground is the default. `--background` returns a job id. `--wait` is only valid on `status`.
+
+```
+/grok-router:analyze --best --effort xhigh map the auth flow
+/grok-router:exec --best fix the race and run the focused tests
+/grok-router:review --base main
+/grok-router:review --panel
+/grok-router:review --lanes correctness,errors,tests
+/grok-router:cli clone --help
 ```
 
-Start a new host-agent session after upgrading.
+`--panel` and `--lanes` start N `grok -p --no-subagents` processes. The companion merges findings and prints one report. Full leaf text is `result <id> --lane 0`. Do not `spawn_subagent` for that work.
 
-## Skill layout
+`--model` and `--effort` are whatever this `grok` accepts today. `--best` is the live default from `grok models`. Do not reuse ids from memory.
 
-```text
-SKILL.md                      # router: modes, launch, pointers
-Workflows/                    # Analyze, Exec, Review, Parallel, Session
-references/QuickRef.md        # verified CLI flag surface
-references/LaunchPatterns.md
+`--lean` is a router flag, not a Grok flag. Opt in. It shortens the default system prompt and strips MCP meta-tools. House `~/.grok/Agents.md` can still land in prompt context.
+
+## How it stays current
+
+Grok changes models and flags without a Router release. The companion reads `grok --help`, `grok models`, and `grok inspect --json` on this machine. New flags show up on `:surface`. Unclassified subcommands go through `:cli`.
+
+## Policy
+
+analyze and review pass `--tools "read_file,grep,list_dir"`. exec passes `--always-approve`. Review embeds `git diff`. There is no `grok review` command.
+
+## Grok TUI
+
+`/grok-router:setup` (or `node plugins/grok-router/scripts/grok-companion.mjs setup`) copies two scripts into `~/.grok/workflows/`. They show up next to Grok's bundled `deep-research` and `learn-traces`. In Grok, type:
+
+```
+/workflow grok-router-review
+/workflow grok-router-adversarial-review
 ```
 
-## Compatibility
+That uses Grok's own workflow engine. The chat agent does not spawn subagents. Do not load the Claude plugin inside Grok.
 
-| Field | Value |
-|-------|-------|
-| **Skill release** | `v1.0.8` (main) |
-| **Verified Grok CLI** | `grok 1.0.5 (5115b46bc909) [stable]` |
-| **Verified on** | 2026-08-21 |
-| **Changelog** | [`CHANGELOG.md`](CHANGELOG.md) |
+## grok-cli
 
-The installed `grok` binary is the source of truth. Probe `grok --help`, `grok models`, and `grok inspect` rather than assuming flags or model IDs.
+The marketplace also has `grok-cli`: a skill that drives `grok` with no job store. Use it only when you want the raw binary. If `grok-router` is installed, defer to it.
 
 ## License
 

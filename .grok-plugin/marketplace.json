@@ -1,0 +1,21 @@
+{
+  "name": "grok-router",
+  "description": "Host adapters that delegate to the local Grok CLI through Grok Router. Do not install this to recurse Grok into Grok.",
+  "owner": {
+    "name": "gitguffaw"
+  },
+  "plugins": [
+    {
+      "name": "grok-router",
+      "description": "Companion runtime, slash commands, and MCP tools for delegating to Grok from other hosts.",
+      "version": "0.3.0",
+      "source": "./plugins/grok-router"
+    },
+    {
+      "name": "grok-cli",
+      "description": "Thin skill that drives the installed grok binary directly.",
+      "version": "0.1.0",
+      "source": "./plugins/grok-cli"
+    }
+  ]
+}

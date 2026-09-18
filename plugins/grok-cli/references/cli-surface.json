@@ -1,0 +1,358 @@
+{
+  "note": "Root-flag extract for skill packaging. Full multi-command surface lives at grok/contracts/cli-surface.json (regenerate via harness).",
+  "binary": {
+    "version": "1.0.5",
+    "hash": "5115b46bc909",
+    "channel": "stable",
+    "raw": "grok 1.0.5 (5115b46bc909) [stable]",
+    "path": "grok",
+    "captured_at": "2026-08-21T17:14:32.227Z"
+  },
+  "flags": [
+    {
+      "long": "--agent",
+      "short": null,
+      "value": "<NAME>",
+      "help": "Agent name or definition file path",
+      "aliases": []
+    },
+    {
+      "long": "--agents",
+      "short": null,
+      "value": "<JSON>",
+      "help": "Inline subagent definitions as JSON",
+      "aliases": []
+    },
+    {
+      "long": "--allow",
+      "short": null,
+      "value": "<RULE>",
+      "help": "Permission allow rule (compat alias: --allowedTools)",
+      "aliases": []
+    },
+    {
+      "long": "--always-approve",
+      "short": null,
+      "value": null,
+      "help": "Auto-approve all tool executions",
+      "aliases": []
+    },
+    {
+      "long": "--continue",
+      "short": "-c",
+      "value": null,
+      "help": "Continue the most recent session for the current working directory",
+      "aliases": []
+    },
+    {
+      "long": "--cwd",
+      "short": null,
+      "value": "<CWD>",
+      "help": "Working directory",
+      "aliases": []
+    },
+    {
+      "long": "--debug",
+      "short": null,
+      "value": null,
+      "help": "Enable debug logging",
+      "aliases": []
+    },
+    {
+      "long": "--debug-file",
+      "short": null,
+      "value": "<FILE>",
+      "help": "Write debug logs to FILE",
+      "aliases": []
+    },
+    {
+      "long": "--deny",
+      "short": null,
+      "value": "<RULE>",
+      "help": "Permission deny rule (compat alias: --disallowedTools)",
+      "aliases": []
+    },
+    {
+      "long": "--disable-web-search",
+      "short": null,
+      "value": null,
+      "help": "Disable web search and web fetch tools",
+      "aliases": []
+    },
+    {
+      "long": "--disallowed-tools",
+      "short": null,
+      "value": "<TOOLS>",
+      "help": "Built-in tools to remove (comma-separated)",
+      "aliases": []
+    },
+    {
+      "long": "--fork-session",
+      "short": null,
+      "value": null,
+      "help": "When resuming (`--resume` / `--continue`), create a new session ID instead of reusing the original (optionally set via `--session-id`)",
+      "aliases": []
+    },
+    {
+      "long": "--fullscreen",
+      "short": null,
+      "value": null,
+      "help": "Open in the standard fullscreen TUI for this session, overriding a config `[ui] screen_mode = \"minimal\"` preference. Session-scoped only \u2014 does not write config. Fullscreen-vs-inline still follows the alt-screen policy (--no-alt-screen, [terminal] alt_screen, terminal auto-detection)",
+      "aliases": []
+    },
+    {
+      "long": "--help",
+      "short": "-h",
+      "value": null,
+      "help": "Print help (see a summary with '-h')",
+      "aliases": []
+    },
+    {
+      "long": "--include-partial-messages",
+      "short": null,
+      "value": null,
+      "help": "Emit incremental `stream_event` lines (text/thinking deltas) alongside whole messages. Only affects `--output-format streaming-messages-json`",
+      "aliases": []
+    },
+    {
+      "long": "--json-schema",
+      "short": null,
+      "value": "<SCHEMA>",
+      "help": "JSON Schema for structured output. When set, the model is constrained to produce JSON matching this schema. Implies --output-format json. Example: --json-schema '{\"type\":\"object\",\"properties\":{\"name\":{\"type\":\"string\"}}}'",
+      "aliases": []
+    },
+    {
+      "long": "--leader-socket",
+      "short": null,
+      "value": "<PATH>",
+      "help": "Use a custom leader socket path instead of the default `~/.grok/leader.sock`",
+      "aliases": []
+    },
+    {
+      "long": "--model",
+      "short": "-m",
+      "value": "<MODEL>",
+      "help": "Model ID to use",
+      "aliases": []
+    },
+    {
+      "long": "--max-turns",
+      "short": null,
+      "value": "<N>",
+      "help": "Maximum number of agent turns",
+      "aliases": []
+    },
+    {
+      "long": "--minimal",
+      "short": null,
+      "value": null,
+      "help": "Experimental: scrollback-native rendering. Finalized blocks are printed into the terminal's native scrollback (use the terminal's own scroll / selection); a small pinned region holds the prompt + running turn. Session-scoped only \u2014 does not write config. To default plain `grok` to minimal, set `[ui] screen_mode = \"minimal\"` in ~/.grok/config.toml",
+      "aliases": []
+    },
+    {
+      "long": "--no-alt-screen",
+      "short": null,
+      "value": null,
+      "help": "Run inline instead of using the terminal alternate screen",
+      "aliases": []
+    },
+    {
+      "long": "--no-plan",
+      "short": null,
+      "value": null,
+      "help": "Disable plan mode",
+      "aliases": []
+    },
+    {
+      "long": "--no-subagents",
+      "short": null,
+      "value": null,
+      "help": "Disable subagent spawning",
+      "aliases": []
+    },
+    {
+      "long": "--oauth",
+      "short": null,
+      "value": null,
+      "help": "Use OAuth when the welcome screen starts authentication",
+      "aliases": []
+    },
+    {
+      "long": "--output-format",
+      "short": null,
+      "value": "<OUTPUT_FORMAT>",
+      "help": "Output format for headless mode Possible values: - plain - json - streaming-json: NDJSON of the agent native ACP session updates - streaming-messages-json: NDJSON in the Anthropic Messages API wire format [default: plain]",
+      "aliases": [],
+      "possible_values": [
+        "plain",
+        "json",
+        "streaming-json",
+        "streaming-messages-json"
+      ],
+      "default": "plain"
+    },
+    {
+      "long": "--single",
+      "short": "-p",
+      "value": "<PROMPT>",
+      "help": "Single-turn prompt. Prints the response to stdout and exits",
+      "aliases": []
+    },
+    {
+      "long": "--permission-mode",
+      "short": null,
+      "value": "<MODE>",
+      "help": "Permission mode [possible values: default, acceptEdits, auto, dontAsk, bypassPermissions, plan]",
+      "aliases": [],
+      "possible_values": [
+        "default",
+        "acceptEdits",
+        "auto",
+        "dontAsk",
+        "bypassPermissions",
+        "plan"
+      ]
+    },
+    {
+      "long": "--prompt-file",
+      "short": null,
+      "value": "<PATH>",
+      "help": "Single-turn prompt from a file",
+      "aliases": []
+    },
+    {
+      "long": "--prompt-json",
+      "short": null,
+      "value": "<JSON>",
+      "help": "Single-turn prompt as JSON content blocks",
+      "aliases": []
+    },
+    {
+      "long": "--resume",
+      "short": "-r",
+      "value": "[<SESSION_ID_OR_TITLE>]",
+      "help": "Resume a session by ID or title, or the most recent if omitted. Non-ID values match session titles for the current directory (ignoring letter case; a sole renamed match wins among duplicates, otherwise ambiguity errors; UUID-shaped values always mean IDs)",
+      "aliases": []
+    },
+    {
+      "long": "--reasoning-effort",
+      "short": null,
+      "value": "<EFFORT>",
+      "help": "Reasoning effort for reasoning models [aliases: --effort]",
+      "aliases": [
+        "--effort"
+      ]
+    },
+    {
+      "long": "--restore-code",
+      "short": null,
+      "value": null,
+      "help": "Restore the original session's repository snapshot when resuming. Remote sessions require `--worktree` (never checks out into the current directory). Without this flag, resume restores conversation only",
+      "aliases": []
+    },
+    {
+      "long": "--rules",
+      "short": null,
+      "value": "<RULES>",
+      "help": "Extra rules to append to the system prompt",
+      "aliases": []
+    },
+    {
+      "long": "--session-id",
+      "short": "-s",
+      "value": "<SESSION_ID>",
+      "help": "Use a specific session UUID for a **new** conversation (must be a valid UUID and must not already exist under the target session directory). With `--resume`/`--continue`, only valid together with `--fork-session` (names the forked session). Does not resume existing sessions \u2014 use `--resume` / `--continue` instead",
+      "aliases": []
+    },
+    {
+      "long": "--sandbox",
+      "short": null,
+      "value": "<PROFILE>",
+      "help": "Sandbox profile for filesystem and network access [env: GROK_SANDBOX=]",
+      "aliases": [],
+      "env": "GROK_SANDBOX"
+    },
+    {
+      "long": "--system-prompt-override",
+      "short": null,
+      "value": "<PROMPT>",
+      "help": "Override the agent's system prompt (compat alias: --system-prompt)",
+      "aliases": []
+    },
+    {
+      "long": "--tools",
+      "short": null,
+      "value": "<TOOLS>",
+      "help": "Built-in tools to allow (comma-separated)",
+      "aliases": []
+    },
+    {
+      "long": "--version",
+      "short": "-v",
+      "value": null,
+      "help": "Print version",
+      "aliases": []
+    },
+    {
+      "long": "--verbatim",
+      "short": null,
+      "value": null,
+      "help": "Send the prompt exactly as given",
+      "aliases": []
+    },
+    {
+      "long": "--worktree",
+      "short": "-w",
+      "value": "[<WORKTREE>]",
+      "help": "Start the session in a new git worktree, optionally named. With `--resume` of a remote session, pass `--restore-code` to apply the snapshot codebase (conversation is restored either way). Headless (`-p`) does not create a worktree from this flag",
+      "aliases": []
+    },
+    {
+      "long": "--worktree-ref",
+      "short": null,
+      "value": "<WORKTREE_REF>",
+      "help": "Branch, tag, or commit to base the worktree on (with `--worktree`). Defaults to the current HEAD of the source checkout when omitted [aliases: --ref]",
+      "aliases": [
+        "--ref"
+      ]
+    }
+  ],
+  "output_formats": [
+    "plain",
+    "json",
+    "streaming-json",
+    "streaming-messages-json"
+  ],
+  "permission_modes": [
+    "default",
+    "acceptEdits",
+    "auto",
+    "dontAsk",
+    "bypassPermissions",
+    "plan"
+  ],
+  "commands": [
+    "agent",
+    "completions",
+    "dashboard",
+    "doctor",
+    "du",
+    "export",
+    "inspect",
+    "leader",
+    "login",
+    "logout",
+    "mcp",
+    "memory",
+    "models",
+    "plugin",
+    "sessions",
+    "setup",
+    "trace",
+    "update",
+    "version",
+    "worktree",
+    "wrap"
+  ],
+  "source_full_surface": "Skill Cooker grok/contracts/cli-surface.json (not shipped in this package)"
+}

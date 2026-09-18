@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "grok-router": {
+      "command": "node",
+      "args": ["./scripts/grok-router-mcp.mjs"],
+      "cwd": ".",
+      "tool_timeout_sec": 900
+    }
+  }
+}
