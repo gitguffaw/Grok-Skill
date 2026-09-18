@@ -50,6 +50,9 @@ test("review --panel launches frozen lanes and prints bounded synthesis", () => 
   fs.writeFileSync(path.join(tempDir, "README.md"), "hello world\n");
   const result = runCompanion(["review", "--panel"], tempDir);
   assert.equal(result.status, 0, result.stderr + result.stdout);
+  assert.match(result.stderr, /# Grok review panel Started/);
+  assert.match(result.stderr, /Job ID:\s+\S+/);
+  assert.match(result.stderr, /Lane correctness bugs:/);
   const synthesis = JSON.parse(result.stdout);
   assert.equal(synthesis.lanes.length, 3);
   assert.ok(Array.isArray(synthesis.findings));

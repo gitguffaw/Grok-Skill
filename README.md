@@ -35,7 +35,7 @@ Codex: install the same plugin and use the `grok_router_*` MCP tools. Same compa
 | Jobs | `:status` `:result` `:cancel` | Cancel only |
 | Unmodeled `grok` argv | `:cli` | Depends |
 
-Foreground is the default. `--background` returns a job id. `--wait` is only valid on `status`.
+Foreground is the default. Job ID and progress print on stderr as soon as the job is queued. stdout is the finished result. `--background` returns a job id on stdout. `--wait` is only valid on `status`.
 
 ```
 /grok-router:analyze --best --effort xhigh map the auth flow

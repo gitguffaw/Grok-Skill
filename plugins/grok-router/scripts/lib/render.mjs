@@ -1,4 +1,16 @@
+import fs from "node:fs";
+import process from "node:process";
 import { isActiveJobStatus, readLogPreview } from "./jobs.mjs";
+
+const PROGRESS_LINE_MAX = 240;
+
+function writeStderr(text) {
+  try {
+    fs.writeSync(process.stderr.fd ?? 2, text);
+  } catch {
+    process.stderr.write(text);
+  }
+}
 
 function escapeCell(value) {
   return String(value ?? "").replace(/\|/g, "\\|").replace(/\r?\n/g, " ").trim();
@@ -56,6 +68,19 @@ export function renderStartedJob(job) {
     `Cancel: grok-router cancel ${job.id}`,
     ""
   ].join("\n");
+}
+
+export function emitJobStarted(job) {
+  writeStderr(renderStartedJob(job));
+}
+
+export function emitLiveProgress(message) {
+  const text = String(message ?? "").replace(/\s+/g, " ").trim();
+  if (!text || text === "Grok stdout") {
+    return;
+  }
+  const clipped = text.length > PROGRESS_LINE_MAX ? `${text.slice(0, PROGRESS_LINE_MAX - 3)}...` : text;
+  writeStderr(`[grok-router] ${clipped}\n`);
 }
 
 export function renderStatusReport(jobs) {

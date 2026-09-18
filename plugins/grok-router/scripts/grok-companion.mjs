@@ -34,6 +34,8 @@ import {
 import { renderModelCatalog } from "./lib/models.mjs";
 import { binaryAvailable, runCommand, runProcess, spawnDetached } from "./lib/process.mjs";
 import {
+  emitJobStarted,
+  emitLiveProgress,
   renderCommandPayload,
   renderJobStatus,
   renderSetupReport,
@@ -189,7 +191,7 @@ function routerHelpPayload() {
       "analyze/review are read-only (--tools read_file,grep,list_dir). exec uses --always-approve.",
       "--lean is a router-owned context diet (not a grok flag). Opt-in. House AGENTS.md may still inject via prompt_context. --full restores 0.1.0 behavior. --search with --lean keeps web tools.",
       "Fan-out: --lanes a,b,c or review --panel launches N grok -p --no-subagents leaves. The companion merges json-schema findings. Full leaf text: result <id> --lane k. Do not spawn_subagent in the lead. Claude and Codex only. Do not install this plugin into Grok.",
-      "Foreground is the default. --background detaches a tracked worker. --wait is only valid on status.",
+      "Foreground is the default. Job ID and progress print on stderr as soon as the job is queued. stdout is the finished result. --background detaches a tracked worker. --wait is only valid on status.",
       "New Grok flags appear on surface as safe-forward or cli-only. Use cli for unmodeled subcommands."
     ]
   };
@@ -406,17 +408,29 @@ async function runStoredJob(workspaceRoot, jobId, options = {}) {
   if (!stored) {
     throw new Error(`Missing stored job ${jobId}`);
   }
+  const live = options.live === true;
   return runTrackedJob(stored, async (hooks) => {
     appendLogLine(stored.logFile, `Invoking Grok ${stored.mode}.`);
+    if (live) {
+      emitLiveProgress(`Invoking Grok ${stored.kindLabel ?? stored.mode}.`);
+    }
     return runGrokPrintJob(workspaceRoot, stored.request, {
       env,
       detached: options.backgroundWorker ? false : undefined,
       timeoutMs: stored.request.controls?.timeoutMs,
       readGitStatus: () => readGitStatus(workspaceRoot),
-      onProgress: (event) => appendLogLine(stored.logFile, event.logBody ?? event.message),
+      onProgress: (event) => {
+        appendLogLine(stored.logFile, event.logBody ?? event.message);
+        if (live) {
+          emitLiveProgress(event.message);
+        }
+      },
       onSpawn: options.backgroundWorker
         ? undefined
         : (processRecord) => {
+          if (live && Number.isFinite(processRecord?.pid)) {
+            emitLiveProgress(`Grok pid ${processRecord.pid}`);
+          }
           hooks.updateProcess(processRecord);
         }
     });
@@ -521,7 +535,8 @@ async function runRouted(mode, { options, positionals }, { nativeControls } = {}
     return;
   }
 
-  const finished = await runStoredJob(workspaceRoot, job.id, { env });
+  emitJobStarted({ ...job, status: "running" });
+  const finished = await runStoredJob(workspaceRoot, job.id, { env, live: !options.json });
   if (options.json) {
     output(finished, true);
     return;
@@ -568,7 +583,8 @@ async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env,
     logFile,
     createdAt: new Date().toISOString()
   }, env);
-  const finished = await runStoredJob(workspaceRoot, jobId, { env });
+  emitLiveProgress(`Lane ${lane}: ${jobId}`);
+  const finished = await runStoredJob(workspaceRoot, jobId, { env, live: !options.json });
   return {
     id: finished.id ?? jobId,
     label: lane,
@@ -604,6 +620,11 @@ async function runPanel(mode, { options, prompt, lanes, nativeControls, cwd, env
     logFile,
     createdAt: new Date().toISOString()
   }, env);
+  emitJobStarted({
+    id: parentId,
+    kindLabel: `${mode} panel`,
+    status: "running"
+  });
   const leafResults = [];
   for (const lane of lanes) {
     appendLogLine(logFile, `Lane ${lane}`);

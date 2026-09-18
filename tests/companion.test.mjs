@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { COMPANION, makeTempDir, readArgv, testEnv } from "./helpers.mjs";
 
 function runCompanion(args, tempDir, extras = {}) {
@@ -48,6 +48,8 @@ test("analyze launches grok -p with a read-only tool allowlist", () => {
   assert.ok(recorded.argv.includes("read_file,grep,list_dir"));
   assert.ok(!recorded.argv.includes("--always-approve"));
   assert.match(result.stdout, /fake grok response/);
+  assert.match(result.stderr, /# Grok Analyze Started/);
+  assert.match(result.stderr, /Job ID:\s+\S+/);
 });
 
 test("exec launches grok -p with --always-approve", () => {
@@ -64,6 +66,57 @@ test("cli forwards unmodeled help", () => {
   const result = runCompanion(["cli", "clone", "--help"], tempDir);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Help for clone/);
+});
+
+function initGitRepo(tempDir) {
+  spawnSync("git", ["init"], { cwd: tempDir, encoding: "utf8" });
+  fs.writeFileSync(path.join(tempDir, "README.md"), "hello\n");
+  spawnSync("git", ["add", "README.md"], { cwd: tempDir, encoding: "utf8" });
+  spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "init"], { cwd: tempDir, encoding: "utf8" });
+  fs.writeFileSync(path.join(tempDir, "README.md"), "hello world\n");
+}
+
+test("foreground review emits job id on stderr before grok finishes", async () => {
+  const tempDir = makeTempDir();
+  initGitRepo(tempDir);
+  const child = spawn(process.execPath, [COMPANION, "review"], {
+    cwd: tempDir,
+    env: { ...testEnv(tempDir), GROK_FAKE_SLEEP_MS: "1200" },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  let stderr = "";
+  let stdout = "";
+  let sawJobId = false;
+  let exited = false;
+  child.stderr.setEncoding("utf8");
+  child.stdout.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+    if (/Job ID:\s+\S+/.test(stderr)) {
+      sawJobId = true;
+    }
+  });
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  const closed = new Promise((resolve) => {
+    child.on("close", (status) => {
+      exited = true;
+      resolve(status);
+    });
+  });
+  const deadline = Date.now() + 2000;
+  while (!sawJobId && !exited && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  assert.equal(exited, false, `job id should appear before grok exits; stderr=${stderr}`);
+  assert.match(stderr, /# Grok Review Started/);
+  assert.match(stderr, /Job ID:\s+\S+/);
+  assert.match(stderr, /grok-router status /);
+  const status = await closed;
+  assert.equal(status, 0, stderr + stdout);
+  assert.equal(stdout.includes("# Grok Review Started"), false);
+  assert.match(stdout, /fake lane|fake grok response|findings/i);
 });
 
 test("review --lean writes a prompt file and does not forward --lean", () => {

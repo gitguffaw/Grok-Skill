@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-- Claude Code and Codex remain the plugin hosts. `setup` copies `grok-router-review.rhai` and `grok-router-adversarial-review.rhai` to `~/.grok/workflows/` for Grok TUI `/workflow`.
+## 0.3.1
+
+- Foreground analyze/exec/review/rescue print `Job ID` and live progress on stderr as soon as the job is queued. Finished findings stay on stdout. `--background` still prints the job id on stdout and returns.
 
 ## 0.3.0
 

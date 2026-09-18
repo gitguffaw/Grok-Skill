@@ -8,6 +8,7 @@ user-invocable: false
 
 Return companion stdout as-is for reviews, status tables, models reports, and setup reports.
 
+- Foreground jobs print `Job ID` and progress on stderr immediately. stdout is the finished result. Do not wait for completion to report the job id if stderr already has it.
 - Review findings first. Do not auto-fix.
 - If Grok edited files, say so and inspect `git status` / `git diff`.
 - If a job id is reported, `status` is progress and `result` is full output.

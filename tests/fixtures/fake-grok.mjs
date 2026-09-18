@@ -60,6 +60,11 @@ if (argv.includes("--help") || argv.includes("-h") || argv[0] === "help") {
 const promptIndex = argv.indexOf("-p");
 const promptFileIndex = argv.indexOf("--prompt-file");
 if (promptIndex !== -1 || promptFileIndex !== -1) {
+  const sleepMs = Number(process.env.GROK_FAKE_SLEEP_MS || 0);
+  if (Number.isFinite(sleepMs) && sleepMs > 0) {
+    process.stderr.write("fake grok working\n");
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, sleepMs);
+  }
   const prompt = promptIndex !== -1
     ? argv[promptIndex + 1]
     : fs.readFileSync(argv[promptFileIndex + 1], "utf8");
