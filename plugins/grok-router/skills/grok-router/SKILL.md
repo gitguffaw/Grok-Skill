@@ -15,7 +15,7 @@ If `CLAUDE_PLUGIN_ROOT` is unset, use `GROK_ROUTER_ROOT` or search upward for `p
 
 ## Modes
 
-- `setup` — grok binary, auth, inspect
+- `setup` — grok on PATH, inspect. Does not log you in.
 - `models` — live catalog from `grok models`
 - `surface` / `help` / `version` — what this binary can do right now
 - `analyze` — read-only

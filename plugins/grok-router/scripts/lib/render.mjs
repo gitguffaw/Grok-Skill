@@ -34,7 +34,6 @@ export function renderSetupReport(report) {
     "Checks:",
     `- node: ${report.node.detail}`,
     `- grok: ${report.grok.detail}`,
-    `- auth: ${report.auth.detail}`,
     `- inspect: ${report.inspect.ok ? `grok ${report.inspect.parsed?.grokVersion ?? "ok"}` : report.inspect.detail}`
   ];
   if (report.load) {
@@ -44,9 +43,6 @@ export function renderSetupReport(report) {
     for (const item of report.load.instructions ?? []) {
       lines.push(`  - ${item.path ?? "instruction"} (${item.scope ?? "unknown"}, ${item.approxTokens ?? "?"} tokens)`);
     }
-  }
-  if (report.reviewGate) {
-    lines.push(`- review gate: ${report.reviewGate.enabled ? "enabled" : "disabled"}`);
   }
   if (report.nextSteps.length) {
     lines.push("", "Next steps:");

@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 import { hasLeadingHelpFlag, parseArgs, splitRawArgumentString } from "./lib/args.mjs";
 import { createContextPack } from "./lib/context-pack.mjs";
 import {
-  getGrokAuthStatus,
   getGrokAvailability,
   grokHome,
   grokInvocation,
@@ -46,7 +45,7 @@ import {
 } from "./lib/render.mjs";
 import { mergeLaneFindings, parseLanes, renderSynthesis } from "./lib/panel.mjs";
 import { buildRouterRequest } from "./lib/router.mjs";
-import { generateJobId, getConfig, readJobFile, resolveJobsDir, saveJob, setConfig } from "./lib/state.mjs";
+import { generateJobId, readJobFile, resolveJobsDir, saveJob } from "./lib/state.mjs";
 import { readGitDiff, readGitStatus, resolveWorkspaceRoot } from "./lib/workspace.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
@@ -88,9 +87,7 @@ const ROUTER_PARSE_SEED = {
     "fresh",
     "resume-last",
     "allow-mutating",
-    "allow-dangerous",
-    "enable-review-gate",
-    "disable-review-gate"
+    "allow-dangerous"
   ],
   arrayOptions: ["tool"],
   aliasMap: { m: "model", C: "cwd", h: "help" },
@@ -199,7 +196,7 @@ function routerHelpPayload() {
 
 function commandSummary(name) {
   return {
-    setup: "Check grok, auth, and optional review gate",
+    setup: "Check grok on PATH. Does not log you in. Stop hook is review --panel on a dirty tree.",
     models: "Live grok models catalog",
     surface: "Installed CLI version, help, and router coverage",
     help: "Router help, or grok <path> --help",
@@ -252,44 +249,28 @@ function installWorkflows(env = process.env) {
 async function handleSetup(argv) {
   const { options } = parseCommandInput(argv, { stopAtPositional: true });
   const cwd = resolveCwd(options);
-  if (options["enable-review-gate"]) {
-    setConfig(cwd, { stopReviewGate: true });
-  }
-  if (options["disable-review-gate"]) {
-    setConfig(cwd, { stopReviewGate: false });
-  }
   const node = binaryAvailable("node", ["--version"], { cwd });
   const grok = getGrokAvailability(cwd);
-  const auth = grok.available ? getGrokAuthStatus(cwd) : { loggedIn: false, detail: "grok unavailable" };
   const inspect = grok.available ? readGrokInspect(cwd) : { ok: false, parsed: null, detail: "grok unavailable" };
   const load = inspect.ok ? summarizeInspect(inspect.parsed) : null;
-  const config = getConfig(cwd);
   const nextSteps = [];
   if (!grok.available) {
     nextSteps.push("Install Grok CLI from https://x.ai/cli and put `grok` on PATH.");
   }
-  if (grok.available && !auth.loggedIn) {
-    nextSteps.push("Run `grok login`. If the browser is blocked, use `grok login --device-auth` or set XAI_API_KEY.");
-  }
   const workflows = installWorkflows();
-  if (!config.stopReviewGate) {
-    nextSteps.push("Optional: grok-router setup --enable-review-gate");
-  }
   if (workflows.copied.length) {
     nextSteps.push(`Grok TUI: /workflow grok-router-review (copied ${workflows.copied.join(", ")} to ${workflows.dest}).`);
   }
   const report = {
-    ready: node.available && grok.available && auth.loggedIn,
+    ready: node.available && grok.available,
     node,
     grok,
-    auth,
     inspect: {
       ok: inspect.ok,
       detail: inspect.ok ? inspect.parsed?.grokVersion : (inspect.raw || inspect.result?.stderr || "failed")
     },
     load,
     workflows,
-    reviewGate: { enabled: Boolean(config.stopReviewGate) },
     nextSteps
   };
   output(options.json ? report : renderSetupReport(report), Boolean(options.json));

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.2
+
+- Grok Router does not log you in. Setup is ready when `node` and `grok` are on PATH.
+- Stop hook runs `review --panel` on a dirty git tree when the host ends a turn. Clean tree skips. Findings go to stderr so the hook does not block the turn. Approving the hook in Codex is opt-in, not a login.
+
 ## 0.3.1
 
 - Foreground analyze/exec/review/rescue print `Job ID` and live progress on stderr as soon as the job is queued. Finished findings stay on stdout. `--background` still prints the job id on stdout and returns.

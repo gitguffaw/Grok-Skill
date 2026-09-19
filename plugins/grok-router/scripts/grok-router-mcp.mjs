@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -9,9 +10,10 @@ import { readGrokHelp } from "./lib/grok.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const COMPANION = path.join(ROOT, "scripts", "grok-companion.mjs");
+const PLUGIN_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "plugin.json"), "utf8")).version;
 
 const MANAGED = [
-  { name: "grok_router_setup", command: "setup", description: "Check grok binary, auth, and review-gate configuration." },
+  { name: "grok_router_setup", command: "setup", description: "Check grok on PATH. The router does not log you in." },
   { name: "grok_router_models", command: "models", description: "Live grok models catalog." },
   { name: "grok_router_surface", command: "surface", description: "Installed grok help and router coverage." },
   { name: "grok_router_help", command: "help", description: "Router help or grok <path> --help." },
@@ -126,7 +128,7 @@ async function handle(message) {
     reply(id, {
       protocolVersion: params?.protocolVersion ?? "2024-11-05",
       capabilities: { tools: {} },
-      serverInfo: { name: "grok-router", version: "0.1.0" }
+      serverInfo: { name: "grok-router", version: PLUGIN_VERSION }
     });
     return;
   }

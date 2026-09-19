@@ -1,6 +1,6 @@
 ---
 description: Check whether Grok Router can run the local grok CLI
-argument-hint: '[--enable-review-gate|--disable-review-gate] [--json]'
+argument-hint: '[--json]'
 disable-model-invocation: true
 allowed-tools: Bash(node:*)
 ---
