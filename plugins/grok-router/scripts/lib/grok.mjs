@@ -270,6 +270,7 @@ export async function runGrokPrintJob(cwd, request, options = {}) {
       command: invocation.command,
       args,
       timedOut: Boolean(result.timedOut),
+      timeoutMs,
       signal: result.signal,
       rawOutput: text,
       parsedOutput: parsed,
@@ -280,7 +281,10 @@ export async function runGrokPrintJob(cwd, request, options = {}) {
       gitAfter
     },
     rendered: [
-      text || result.stderr || (result.error ? result.error.message : `exit ${exitStatus}`),
+      text || (result.timedOut
+        ? `Timed out after ${timeoutMs}ms (${Math.round(timeoutMs / 60000)} min). Partial working-tree edits were not reverted.`
+        : (result.stderr || (result.error ? result.error.message : `exit ${exitStatus}`))),
+      result.timedOut && gitAfter?.short ? `\n\ngit status --short:\n${gitAfter.short}` : "",
       warnings.length ? `\nWarnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}` : ""
     ].join("").trimEnd(),
     warnings

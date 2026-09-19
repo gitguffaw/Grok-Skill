@@ -10,6 +10,7 @@ import {
   getGrokAvailability,
   grokHome,
   grokInvocation,
+  managedTimeoutMs,
   readGrokHelp,
   readGrokInspect,
   readGrokModels,
@@ -31,7 +32,7 @@ import {
   waitForJob
 } from "./lib/jobs.mjs";
 import { renderModelCatalog } from "./lib/models.mjs";
-import { binaryAvailable, runCommand, runProcess, spawnDetached } from "./lib/process.mjs";
+import { binaryAvailable, currentProcessRecord, runCommand, runProcess, spawnDetached } from "./lib/process.mjs";
 import {
   emitJobStarted,
   emitLiveProgress,
@@ -43,7 +44,7 @@ import {
   renderStoredJobResult,
   renderSurface
 } from "./lib/render.mjs";
-import { mergeLaneFindings, mergeLaneWork, parseLanes, renderSynthesis } from "./lib/panel.mjs";
+import { mergeLaneFindings, mergeLaneWork, parseLanes, parentStatusFromLanes, renderSynthesis } from "./lib/panel.mjs";
 import { buildRouterRequest } from "./lib/router.mjs";
 import { generateJobId, readJobFile, resolveJobsDir, saveJob } from "./lib/state.mjs";
 import { readGitDiff, readGitStatus, resolveWorkspaceRoot } from "./lib/workspace.mjs";
@@ -500,6 +501,7 @@ async function runRouted(mode, { options, positionals }, { nativeControls } = {}
     request,
     contextPack,
     logFile,
+    timeoutMs: managedTimeoutMs(request.controls?.timeoutMs),
     createdAt: new Date().toISOString()
   }, env);
 
@@ -532,7 +534,7 @@ async function runRouted(mode, { options, positionals }, { nativeControls } = {}
   }
 }
 
-async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env, workspaceRoot, models, version, gitBefore, diff }) {
+async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env, workspaceRoot, models, version, gitBefore, diff, parentId }) {
   const request = buildRouterRequest({
     mode,
     prompt,
@@ -557,6 +559,7 @@ async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env,
     kindLabel: `${request.workflow} (${lane})`,
     mode,
     lane,
+    parentId: parentId ?? null,
     title: lane,
     summary: lane,
     workspaceRoot,
@@ -566,6 +569,7 @@ async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env,
     request,
     contextPack,
     logFile,
+    timeoutMs: managedTimeoutMs(request.controls?.timeoutMs),
     createdAt: new Date().toISOString()
   }, env);
   emitLiveProgress(`Lane ${lane}: ${jobId}`);
@@ -580,6 +584,31 @@ async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env,
   };
 }
 
+function persistPanel(workspaceRoot, parent, leafResults, env, extra = {}) {
+  const synthesis = parent.mode === "review" || parent.mode === "adversarial-review"
+    ? mergeLaneFindings(leafResults)
+    : mergeLaneWork(leafResults, parent.mode);
+  const rendered = renderSynthesis(synthesis);
+  const outcome = extra.status
+    ? { status: extra.status, phase: extra.phase ?? extra.status }
+    : parentStatusFromLanes(leafResults);
+  const terminal = !["queued", "running"].includes(outcome.status);
+  return saveJob(workspaceRoot, {
+    ...parent,
+    ...extra,
+    status: outcome.status,
+    phase: outcome.phase,
+    summary: synthesis.summary,
+    plannedLanes: parent.plannedLanes ?? parent.lanes,
+    lanes: synthesis.lanes,
+    childIds: leafResults.map((lane) => lane.id).filter(Boolean),
+    synthesis,
+    rendered,
+    logFile: parent.logFile,
+    completedAt: terminal ? new Date().toISOString() : null
+  }, env);
+}
+
 async function runPanel(mode, { options, prompt, lanes, nativeControls, cwd, env, workspaceRoot }) {
   const models = readGrokModels(cwd, env);
   const version = readGrokVersion(cwd, env);
@@ -590,7 +619,9 @@ async function runPanel(mode, { options, prompt, lanes, nativeControls, cwd, env
   }
   const parentId = generateJobId(`${mode}-panel`);
   const logFile = createJobLogFile(workspaceRoot, parentId, `Grok ${mode} panel`, env);
-  saveJob(workspaceRoot, {
+  const controller = currentProcessRecord();
+  const timeoutMs = managedTimeoutMs(options["timeout-ms"]);
+  let parent = saveJob(workspaceRoot, {
     id: parentId,
     jobClass: "grok-panel",
     kindLabel: `${mode} panel`,
@@ -600,9 +631,14 @@ async function runPanel(mode, { options, prompt, lanes, nativeControls, cwd, env
     workspaceRoot,
     status: "running",
     phase: "panel",
-    lanes,
-    write: false,
+    plannedLanes: lanes,
+    lanes: lanes.map((label) => ({ label, id: null, status: "queued", result: "not started" })),
+    childIds: [],
+    write: mode === "exec",
     logFile,
+    timeoutMs,
+    companionPid: controller.pid,
+    companionProcessStartTime: controller.processStartTime,
     createdAt: new Date().toISOString()
   }, env);
   emitJobStarted({
@@ -610,49 +646,57 @@ async function runPanel(mode, { options, prompt, lanes, nativeControls, cwd, env
     kindLabel: `${mode} panel`,
     status: "running"
   });
-  const leafResults = [];
-  for (const lane of lanes) {
-    appendLogLine(logFile, `Lane ${lane}`);
-    leafResults.push(await launchLeafJob(mode, {
-      options,
-      prompt,
-      lane,
-      nativeControls,
-      env,
-      workspaceRoot,
-      models,
-      version,
-      gitBefore,
-      diff
-    }));
+  const leafResults = lanes.map((label) => ({
+    id: null,
+    label,
+    status: "queued",
+    structuredOutput: null,
+    parsedOutput: null,
+    rendered: ""
+  }));
+  try {
+    for (let index = 0; index < lanes.length; index += 1) {
+      const lane = lanes[index];
+      appendLogLine(logFile, `Lane ${lane}`);
+      leafResults[index] = { ...leafResults[index], status: "running" };
+      parent = persistPanel(workspaceRoot, parent, leafResults, env);
+      const finished = await launchLeafJob(mode, {
+        options,
+        prompt,
+        lane,
+        nativeControls,
+        env,
+        workspaceRoot,
+        models,
+        version,
+        gitBefore,
+        diff,
+        parentId
+      });
+      leafResults[index] = finished;
+      parent = persistPanel(workspaceRoot, parent, leafResults, env);
+    }
+    parent = persistPanel(workspaceRoot, parent, leafResults, env);
+  } catch (error) {
+    appendLogLine(logFile, error instanceof Error ? error.stack || error.message : String(error));
+    for (const leaf of leafResults) {
+      if (leaf.status === "queued" || (leaf.status === "running" && !leaf.id)) {
+        leaf.status = "not-started";
+      }
+    }
+    parent = persistPanel(workspaceRoot, parent, leafResults, env, {
+      result: { error: error instanceof Error ? error.message : String(error) }
+    });
+    throw error;
   }
-  const synthesis = mode === "review" || mode === "adversarial-review"
-    ? mergeLaneFindings(leafResults)
-    : mergeLaneWork(leafResults, mode);
-  const rendered = renderSynthesis(synthesis);
-  const parent = saveJob(workspaceRoot, {
-    id: parentId,
-    jobClass: "grok-panel",
-    kindLabel: `${mode} panel`,
-    mode,
-    title: lanes.join(", ").slice(0, 96),
-    summary: synthesis.summary,
-    workspaceRoot,
-    status: leafResults.every((lane) => ["completed", "completed-with-warnings"].includes(lane.status))
-      ? "completed"
-      : "completed-with-warnings",
-    phase: "done",
-    lanes: synthesis.lanes,
-    synthesis,
-    rendered,
-    logFile,
-    completedAt: new Date().toISOString()
-  }, env);
   if (options.json) {
     output(parent, true);
     return;
   }
-  process.stdout.write(rendered);
+  process.stdout.write(parent.rendered?.endsWith("\n") ? parent.rendered : `${parent.rendered ?? ""}\n`);
+  if (parent.status && !["completed", "completed-with-warnings"].includes(parent.status)) {
+    process.exitCode = 1;
+  }
 }
 
 async function handleStatus(argv) {

@@ -106,6 +106,15 @@ export function renderJobStatus(job) {
     `Phase: ${job.phase ?? ""}`,
     `Elapsed: ${elapsed(job)}`
   ];
+  if (Number.isFinite(job.timeoutMs)) {
+    lines.push(`Timeout: ${job.timeoutMs}ms`);
+  }
+  if (Array.isArray(job.lanes) && job.lanes.length && typeof job.lanes[0] === "object") {
+    lines.push("Lanes:");
+    for (const lane of job.lanes) {
+      lines.push(`- ${lane.label}: ${lane.status}${lane.id ? ` (${lane.id})` : ""}`);
+    }
+  }
   if (job.contextPack?.id) {
     lines.push(`Context pack: ${job.contextPack.id}`);
   }

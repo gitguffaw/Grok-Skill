@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.3.4
+
+- Panel parent jobs record a controller PID, persist each lane as it finishes, and reconcile to a terminal status when the controller is gone. Never-started lanes are marked. `status`/`result` no longer leave a dead panel `running` with `{}`.
+- Job records store the managed timeout (default 30 minutes). Timed-out exec results include that timeout and `git status --short` so partial working-tree edits are visible.
+- `git status` / `git diff` used by the router cap at 8 seconds so a huge dirty tree cannot stall the job after Grok already timed out.
+
 ## 0.3.3
 
 - `exec --lanes login,billing,tests` is the multiple-coding-Grok option. Help, MCP schema, and exec command advertise it. `--panel` stays review-only. Exec/analyze lane reports are per-slice summaries, not empty review findings.

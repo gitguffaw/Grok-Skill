@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { collectPanelChildren, parentStatusFromLanes, synthesizePanelFromChildren } from "./panel.mjs";
 import { currentProcessRecord, terminateProcessTree, verifyProcessRecord } from "./process.mjs";
 import { listJobs, readJobFile, resolveJobLogFile, saveJob, transitionJob } from "./state.mjs";
 
@@ -157,48 +158,132 @@ export async function runTrackedJob(job, runner, options = {}) {
   }
 }
 
-export function reconcileStaleJob(cwd, job, env = process.env) {
-  if (!isActiveJobStatus(job.status) || !Number.isFinite(job.pid)) {
-    return job;
+function processGone(record, envPlatform = process.platform) {
+  if (!Number.isFinite(record?.pid)) {
+    return true;
   }
   const verification = verifyProcessRecord(
-    { pid: job.pid, processStartTime: job.processStartTime ?? null },
-    { allowUnverified: process.platform === "win32" }
+    { pid: record.pid, processStartTime: record.processStartTime ?? record.companionProcessStartTime ?? null },
+    { allowUnverified: envPlatform === "win32" }
   );
-  if (verification.matches || verification.reason === "unverifiable") {
+  return !(verification.matches || verification.reason === "unverifiable");
+}
+
+export function reconcilePanelJob(cwd, job, env = process.env) {
+  if (job.jobClass !== "grok-panel" || !isActiveJobStatus(job.status)) {
     return job;
   }
-  if (Number.isFinite(job.companionPid)) {
-    const companion = verifyProcessRecord(
-      { pid: job.companionPid, processStartTime: job.companionProcessStartTime ?? null },
-      { allowUnverified: process.platform === "win32" }
-    );
-    if (companion.matches || companion.reason === "unverifiable") {
-      return job;
-    }
+  const children = collectPanelChildren(listJobs(cwd, env), job);
+  const snapshot = synthesizePanelFromChildren(job, children);
+  const outcome = parentStatusFromLanes(snapshot.leafResults);
+  const controllerGone = processGone({
+    pid: job.companionPid,
+    processStartTime: job.companionProcessStartTime
+  });
+  let status = job.status;
+  let phase = job.phase;
+  if (controllerGone) {
+    status = outcome.status === "running" ? "failed" : outcome.status;
+    phase = outcome.status === "running" ? "stale-process" : outcome.phase;
+  } else if (outcome.status !== "running") {
+    status = outcome.status;
+    phase = outcome.phase;
   }
+  const terminal = !isActiveJobStatus(status);
   return transitionJob(cwd, job.id, (current) => {
     if (!current || !isActiveJobStatus(current.status)) {
       return { apply: false, reason: "skip", job: current };
     }
     return {
       apply: true,
-      reason: "stale",
+      reason: terminal ? "panel-reconcile-terminal" : "panel-progress",
       job: {
         ...current,
-        status: "failed",
-        phase: "stale-process",
+        status,
+        phase,
+        lanes: snapshot.synthesis.lanes,
+        childIds: children.map((child) => child.id),
+        synthesis: snapshot.synthesis,
+        rendered: snapshot.rendered,
+        summary: snapshot.synthesis.summary,
         pid: null,
-        completedAt: nowIso(),
-        result: { error: `Recorded process is stale: ${verification.reason}` }
+        completedAt: terminal ? nowIso() : current.completedAt ?? null
       }
     };
   }, env).job ?? job;
 }
 
+export function reconcileStaleJob(cwd, job, env = process.env) {
+  if (!isActiveJobStatus(job.status)) {
+    return job;
+  }
+  if (job.jobClass === "grok-panel") {
+    return reconcilePanelJob(cwd, job, env);
+  }
+  if (Number.isFinite(job.pid)) {
+    const verification = verifyProcessRecord(
+      { pid: job.pid, processStartTime: job.processStartTime ?? null },
+      { allowUnverified: process.platform === "win32" }
+    );
+    if (verification.matches || verification.reason === "unverifiable") {
+      return job;
+    }
+    if (Number.isFinite(job.companionPid) && !processGone({
+      pid: job.companionPid,
+      processStartTime: job.companionProcessStartTime
+    })) {
+      return job;
+    }
+    return transitionJob(cwd, job.id, (current) => {
+      if (!current || !isActiveJobStatus(current.status)) {
+        return { apply: false, reason: "skip", job: current };
+      }
+      return {
+        apply: true,
+        reason: "stale",
+        job: {
+          ...current,
+          status: "failed",
+          phase: "stale-process",
+          pid: null,
+          completedAt: nowIso(),
+          result: { error: `Recorded process is stale: ${verification.reason}` }
+        }
+      };
+    }, env).job ?? job;
+  }
+  if (Number.isFinite(job.companionPid) && processGone({
+    pid: job.companionPid,
+    processStartTime: job.companionProcessStartTime
+  })) {
+    return transitionJob(cwd, job.id, (current) => {
+      if (!current || !isActiveJobStatus(current.status)) {
+        return { apply: false, reason: "skip", job: current };
+      }
+      return {
+        apply: true,
+        reason: "stale-companion",
+        job: {
+          ...current,
+          status: "failed",
+          phase: "stale-process",
+          pid: null,
+          completedAt: nowIso(),
+          result: { error: "Recorded companion process is stale: not-running" }
+        }
+      };
+    }, env).job ?? job;
+  }
+  return job;
+}
+
 export function refreshStaleJobs(cwd, env = process.env) {
-  for (const job of listJobs(cwd, env)) {
+  const jobs = listJobs(cwd, env);
+  for (const job of jobs.filter((item) => item.jobClass !== "grok-panel")) {
     reconcileStaleJob(cwd, job, env);
+  }
+  for (const job of listJobs(cwd, env).filter((item) => item.jobClass === "grok-panel")) {
+    reconcilePanelJob(cwd, job, env);
   }
 }
 
