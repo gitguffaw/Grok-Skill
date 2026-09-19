@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.3.3
+
+- `exec --lanes login,billing,tests` is the multiple-coding-Grok option. Help, MCP schema, and exec command advertise it. `--panel` stays review-only. Exec/analyze lane reports are per-slice summaries, not empty review findings.
+
 ## 0.3.2
 
 - Grok Router does not log you in. Setup is ready when `node` and `grok` are on PATH.

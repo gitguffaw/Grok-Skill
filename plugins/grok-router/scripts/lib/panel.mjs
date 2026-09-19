@@ -79,7 +79,41 @@ export function mergeLaneFindings(lanes) {
   };
 }
 
+export function mergeLaneWork(lanes, mode = "exec") {
+  const failed = lanes.filter((lane) => lane.status && !["completed", "completed-with-warnings"].includes(lane.status));
+  const summary = failed.length
+    ? `${lanes.length} ${mode} lanes (${failed.length} failed).`
+    : `${lanes.length} ${mode} lanes completed.`;
+  return {
+    kind: "work",
+    mode,
+    summary,
+    lanes: lanes.map((lane) => ({
+      id: lane.id,
+      label: lane.label,
+      status: lane.status ?? "unknown",
+      result: `grok-router result ${lane.id}`,
+      excerpt: String(lane.rendered ?? "").replace(/\s+/g, " ").trim().slice(0, 240)
+    }))
+  };
+}
+
+function renderWorkSynthesis(synthesis) {
+  const lines = [`# Grok ${synthesis.mode} panel`, "", synthesis.summary, ""];
+  for (const lane of synthesis.lanes ?? []) {
+    lines.push(`- ${lane.label}: ${lane.status} — ${lane.result}`);
+    if (lane.excerpt) {
+      lines.push(`  ${lane.excerpt}`);
+    }
+  }
+  lines.push("", "Full leaf: grok-router result <panel-id> --lane 0");
+  return `${lines.join("\n")}\n`;
+}
+
 export function renderSynthesis(synthesis) {
+  if (synthesis?.kind === "work") {
+    return renderWorkSynthesis(synthesis);
+  }
   const body = JSON.stringify(synthesis, null, 2);
   if (body.length <= MAX_SYNTHESIS_CHARS) {
     return `${body}\n`;

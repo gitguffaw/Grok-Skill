@@ -1,6 +1,6 @@
 ---
 description: Run a policy-backed write-capable Grok execution job
-argument-hint: '[--background] [--lean|--full] [--search] [--docs] [--tool <capability>] [--parallel] [--best|--model <id>] [--effort <level>] [prompt]'
+argument-hint: '[--lanes a,b,c] [--background] [--lean|--full] [--search] [--docs] [--tool <capability>] [--best|--model <id>] [--effort <level>] [prompt]'
 disable-model-invocation: true
 allowed-tools: Bash(node:*)
 ---

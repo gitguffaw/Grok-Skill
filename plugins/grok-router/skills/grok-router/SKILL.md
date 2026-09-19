@@ -30,7 +30,7 @@ If `CLAUDE_PLUGIN_ROOT` is unset, use `GROK_ROUTER_ROOT` or search upward for `p
 
 `--lean` is router-owned (not a grok flag). Opt-in. House AGENTS.md may still inject.
 
-Fan-out: pass `--lanes` or review `--panel`. That is **N leaf `grok -p --no-subagents` processes**. Call the companion **once**. Do not `spawn_subagent`. Do not paste lane transcripts into the chat; the companion prints a bounded synthesis. Full leaf: `result <id> --lane k`.
+Fan-out: `exec --lanes login,billing,tests` runs one write Grok per name. `review --panel` is the frozen three-Grok review. `--panel` is invalid on exec. Call the companion **once**. Do not `spawn_subagent`. Full leaf: `result <id> --lane k`.
 
 If you are already Grok, do not load this skill. Use Grok's own `/workflow`.
 

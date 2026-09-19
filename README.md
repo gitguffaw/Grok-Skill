@@ -28,6 +28,7 @@ Codex: install the same plugin and use the `grok_router_*` MCP tools. Same compa
 | --- | --- | --- |
 | Facts, diagnosis | `/grok-router:analyze` | No |
 | A bounded change | `/grok-router:exec` | Yes |
+| Several coding Groks | `/grok-router:exec --lanes a,b,c` | Yes |
 | Bugs in the current diff | `/grok-router:review` | No |
 | Challenge the design | `/grok-router:adversarial-review` | No |
 | Hand Grok a problem | `/grok-router:rescue` | Fix yes, diagnosis no |
@@ -42,13 +43,14 @@ If Codex or Claude Code asks to approve a Stop hook, that is optional. Approve i
 ```
 /grok-router:analyze --best --effort xhigh map the auth flow
 /grok-router:exec --best fix the race and run the focused tests
+/grok-router:exec --lanes login,logout,tests add auth
 /grok-router:review --base main
 /grok-router:review --panel
 /grok-router:review --lanes correctness,errors,tests
 /grok-router:cli clone --help
 ```
 
-`--panel` and `--lanes` start N `grok -p --no-subagents` processes. The companion merges findings and prints one report. Full leaf text is `result <id> --lane 0`. Do not `spawn_subagent` for that work.
+`exec --lanes a,b,c` starts one write Grok per name. `review --panel` starts the three review Groks. They run one after another. Full leaf text is `result <id> --lane 0`.
 
 `--model` and `--effort` are whatever this `grok` accepts today. `--best` is the live default from `grok models`. Do not reuse ids from memory.
 

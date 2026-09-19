@@ -43,7 +43,7 @@ import {
   renderStoredJobResult,
   renderSurface
 } from "./lib/render.mjs";
-import { mergeLaneFindings, parseLanes, renderSynthesis } from "./lib/panel.mjs";
+import { mergeLaneFindings, mergeLaneWork, parseLanes, renderSynthesis } from "./lib/panel.mjs";
 import { buildRouterRequest } from "./lib/router.mjs";
 import { generateJobId, readJobFile, resolveJobsDir, saveJob } from "./lib/state.mjs";
 import { readGitDiff, readGitStatus, resolveWorkspaceRoot } from "./lib/workspace.mjs";
@@ -156,18 +156,22 @@ function discoverRoutedSurface(cwd = process.cwd(), env = process.env) {
 }
 
 function parseRoutedInput(argv, nativeControls) {
+  const valueOwned = new Set(ROUTER_PARSE_SEED.valueOptions);
   const liveConfig = liveControlParseConfig([
     ...nativeControls,
     ...[...ROUTER_OWNED_OPTIONS].map((option) => ({
       option,
       optionAliases: [],
-      kind: ["cwd", "model", "effort", "timeout-ms", "base", "scope", "tool", "resume"].includes(option) ? "value" : "boolean",
+      kind: valueOwned.has(option) ? "value" : "boolean",
       repeatable: option === "tool"
     }))
   ]);
+  const valueOptions = unique([...liveConfig.valueOptions, ...ROUTER_PARSE_SEED.valueOptions]);
+  const booleanOptions = unique([...liveConfig.booleanOptions, ...ROUTER_PARSE_SEED.booleanOptions])
+    .filter((option) => !valueOptions.includes(option));
   return parseCommandInput(argv, {
-    valueOptions: unique([...liveConfig.valueOptions, ...ROUTER_PARSE_SEED.valueOptions]),
-    booleanOptions: unique([...liveConfig.booleanOptions, ...ROUTER_PARSE_SEED.booleanOptions]),
+    valueOptions,
+    booleanOptions,
     optionalValueOptions: liveConfig.optionalValueOptions,
     arrayOptions: unique([...(liveConfig.repeatableOptions ?? []), "tool"]),
     aliasMap: { ...liveConfig.aliasMap, ...ROUTER_PARSE_SEED.aliasMap }
@@ -187,7 +191,7 @@ function routerHelpPayload() {
       "--model and --effort are opaque live values. --best selects the live default from grok models.",
       "analyze/review are read-only (--tools read_file,grep,list_dir). exec uses --always-approve.",
       "--lean is a router-owned context diet (not a grok flag). Opt-in. House AGENTS.md may still inject via prompt_context. --full restores 0.1.0 behavior. --search with --lean keeps web tools.",
-      "Fan-out: --lanes a,b,c or review --panel launches N grok -p --no-subagents leaves. The companion merges json-schema findings. Full leaf text: result <id> --lane k. Do not spawn_subagent in the lead. Claude and Codex only. Do not install this plugin into Grok.",
+      "Multiple Groks: exec --lanes login,billing,tests runs one write Grok per name (same overall prompt, each covers one slice). analyze --lanes works the same, read-only. review --panel is the frozen three-Grok review. They run one after another, max 8. Full leaf: result <id> --lane k. --panel on exec is invalid; name the slices with --lanes.",
       "Foreground is the default. Job ID and progress print on stderr as soon as the job is queued. stdout is the finished result. --background detaches a tracked worker. --wait is only valid on status.",
       "New Grok flags appear on surface as safe-forward or cli-only. Use cli for unmodeled subcommands."
     ]
@@ -202,7 +206,7 @@ function commandSummary(name) {
     help: "Router help, or grok <path> --help",
     version: "Router and grok versions",
     analyze: "Read-only analysis",
-    exec: "Write-capable implementation",
+    exec: "Write-capable. --lanes a,b,c runs one Grok per named slice.",
     review: "Findings-only review of a git diff",
     "adversarial-review": "Steerable challenge review",
     rescue: "Tracked investigate/fix with session resume",
@@ -622,7 +626,9 @@ async function runPanel(mode, { options, prompt, lanes, nativeControls, cwd, env
       diff
     }));
   }
-  const synthesis = mergeLaneFindings(leafResults);
+  const synthesis = mode === "review" || mode === "adversarial-review"
+    ? mergeLaneFindings(leafResults)
+    : mergeLaneWork(leafResults, mode);
   const rendered = renderSynthesis(synthesis);
   const parent = saveJob(workspaceRoot, {
     id: parentId,
