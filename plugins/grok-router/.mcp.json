@@ -2,8 +2,8 @@
   "mcpServers": {
     "grok-router": {
       "command": "node",
-      "args": ["./scripts/grok-router-mcp.mjs"],
-      "cwd": ".",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/grok-router-mcp.mjs"],
+      "cwd": "${CLAUDE_PLUGIN_ROOT}",
       "tool_timeout_sec": 900
     }
   }

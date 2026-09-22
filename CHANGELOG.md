@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The MCP server answers initialize with one JSON line, and `.mcp.json` starts that server from the plugin directory. A session opened in another repo can connect.
+
 ## 0.3.7
 
 - No Stop hook. Review `--panel` runs only when you call it.

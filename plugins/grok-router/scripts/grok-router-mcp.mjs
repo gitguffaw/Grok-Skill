@@ -106,8 +106,9 @@ function runCompanion(command, input) {
 }
 
 function send(message) {
-  const body = JSON.stringify(message);
-  process.stdout.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+  // Grok's MCP client reads one JSON object per line. Content-Length framing
+  // never becomes an initialize result, so the handshake times out.
+  process.stdout.write(`${JSON.stringify(message)}\n`);
 }
 
 function reply(id, result) {
