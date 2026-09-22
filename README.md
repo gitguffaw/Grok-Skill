@@ -4,7 +4,7 @@ Claude Code and Codex call Grok through a companion. You pick a mode. The compan
 
 This replaces the old markdown skill named `Grok` (`grok -p` recipes in `SKILL.md`). If `~/.claude/skills/Grok` or `~/.codex/skills/Grok` still exists, remove it after you install the plugin. Do not install this plugin into Grok TUI.
 
-Needs Node 18.18+ and `grok` on `PATH`. Grok Router does not log you in. If grok is not signed in, grok fails, not the router.
+Needs Node 18.18+ and `grok` on `PATH`. Sign in with `grok login` or `XAI_API_KEY`.
 
 ## Install
 
@@ -28,7 +28,6 @@ Codex: install the same plugin and use the `grok_router_*` MCP tools. Same compa
 | --- | --- | --- |
 | Facts, diagnosis | `/grok-router:analyze` | No |
 | A bounded change | `/grok-router:exec` | Yes |
-| Several coding Groks | `/grok-router:exec --lanes a,b,c` | Yes |
 | Bugs in the current diff | `/grok-router:review` | No |
 | Challenge the design | `/grok-router:adversarial-review` | No |
 | Hand Grok a problem | `/grok-router:rescue` | Fix yes, diagnosis no |
@@ -38,19 +37,16 @@ Codex: install the same plugin and use the `grok_router_*` MCP tools. Same compa
 
 Foreground is the default. Job ID and progress print on stderr as soon as the job is queued. stdout is the finished result. `--background` returns a job id on stdout. `--wait` is only valid on `status`.
 
-If Codex or Claude Code asks to approve a Stop hook, that is optional. Approve it and a dirty git tree at the end of a turn runs `review --panel`. A clean tree skips. It is not a login.
-
 ```
 /grok-router:analyze --best --effort xhigh map the auth flow
 /grok-router:exec --best fix the race and run the focused tests
-/grok-router:exec --lanes login,logout,tests add auth
 /grok-router:review --base main
 /grok-router:review --panel
 /grok-router:review --lanes correctness,errors,tests
 /grok-router:cli clone --help
 ```
 
-`exec --lanes a,b,c` starts one write Grok per name. `review --panel` starts the three review Groks. They run one after another. Full leaf text is `result <id> --lane 0`.
+`--panel` and `--lanes` start N `grok -p --no-subagents` processes. The companion merges findings and prints one report. Full leaf text is `result <id> --lane 0`. Do not `spawn_subagent` for that work.
 
 `--model` and `--effort` are whatever this `grok` accepts today. `--best` is the live default from `grok models`. Do not reuse ids from memory.
 

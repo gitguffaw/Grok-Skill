@@ -34,6 +34,7 @@ export function renderSetupReport(report) {
     "Checks:",
     `- node: ${report.node.detail}`,
     `- grok: ${report.grok.detail}`,
+    `- auth: ${report.auth.detail}`,
     `- inspect: ${report.inspect.ok ? `grok ${report.inspect.parsed?.grokVersion ?? "ok"}` : report.inspect.detail}`
   ];
   if (report.load) {
@@ -43,6 +44,9 @@ export function renderSetupReport(report) {
     for (const item of report.load.instructions ?? []) {
       lines.push(`  - ${item.path ?? "instruction"} (${item.scope ?? "unknown"}, ${item.approxTokens ?? "?"} tokens)`);
     }
+  }
+  if (report.reviewGate) {
+    lines.push(`- review gate: ${report.reviewGate.enabled ? "enabled" : "disabled"}`);
   }
   if (report.nextSteps.length) {
     lines.push("", "Next steps:");
@@ -70,11 +74,51 @@ export function emitJobStarted(job) {
   writeStderr(renderStartedJob(job));
 }
 
-export function emitLiveProgress(message) {
-  const text = String(message ?? "").replace(/\s+/g, " ").trim();
+const ANSI_RE = /\x1b\[[0-9;]*m/g;
+const BLOCKING_START = /\b(not logged in|please log in|login required|authentication failed|authentication required|auth required|unauthorized|invalid api key|missing api key|api key is invalid|credentials)\b/i;
+const HARNESS_NOISE = /\b(plugin name collision|skill name does not match|MCP server|Skipping MCP tool|Error killing MCP|handshake failed|worker quit with fatal|Transport channel closed|grep timed out)\b/i;
+
+export function hostProgressText(message) {
+  return String(message ?? "").replace(ANSI_RE, "").replace(/\s+/g, " ").trim();
+}
+
+export function shouldEmitLiveProgress(message) {
+  const text = hostProgressText(message);
   if (!text || text === "Grok stdout") {
+    return false;
+  }
+  if (BLOCKING_START.test(text)) {
+    return true;
+  }
+  if (/^\d{4}-\d{2}-\d{2}T\S+\s+(WARN|ERROR|INFO|DEBUG)\b/.test(text) || HARNESS_NOISE.test(text)) {
+    return false;
+  }
+  if (/^Grok pid\b/.test(text) || /^Invoking Grok\b/.test(text)) {
+    return false;
+  }
+  return true;
+}
+
+export function stripHostNoise(text) {
+  return String(text ?? "")
+    .split(/\r?\n/)
+    .map((line) => hostProgressText(line))
+    .filter((line) => shouldEmitLiveProgress(line))
+    .join("\n")
+    .trim();
+}
+
+export function takeCompleteLines(buffer, chunk) {
+  const parts = `${buffer}${chunk}`.split(/\r?\n/);
+  const rest = parts.pop() ?? "";
+  return { lines: parts, rest };
+}
+
+export function emitLiveProgress(message) {
+  if (!shouldEmitLiveProgress(message)) {
     return;
   }
+  const text = hostProgressText(message);
   const clipped = text.length > PROGRESS_LINE_MAX ? `${text.slice(0, PROGRESS_LINE_MAX - 3)}...` : text;
   writeStderr(`[grok-router] ${clipped}\n`);
 }
@@ -106,15 +150,6 @@ export function renderJobStatus(job) {
     `Phase: ${job.phase ?? ""}`,
     `Elapsed: ${elapsed(job)}`
   ];
-  if (Number.isFinite(job.timeoutMs)) {
-    lines.push(`Timeout: ${job.timeoutMs}ms`);
-  }
-  if (Array.isArray(job.lanes) && job.lanes.length && typeof job.lanes[0] === "object") {
-    lines.push("Lanes:");
-    for (const lane of job.lanes) {
-      lines.push(`- ${lane.label}: ${lane.status}${lane.id ? ` (${lane.id})` : ""}`);
-    }
-  }
   if (job.contextPack?.id) {
     lines.push(`Context pack: ${job.contextPack.id}`);
   }

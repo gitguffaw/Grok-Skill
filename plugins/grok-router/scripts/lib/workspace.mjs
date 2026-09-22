@@ -1,18 +1,7 @@
 import { runCommand } from "./process.mjs";
 
-const GIT_TIMEOUT_MS = 8000;
-const GIT_ENV = { ...process.env, GIT_OPTIONAL_LOCKS: "0" };
-
-function git(args, cwd) {
-  return runCommand("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", ...args], {
-    cwd,
-    env: GIT_ENV,
-    timeoutMs: GIT_TIMEOUT_MS
-  });
-}
-
 export function resolveWorkspaceRoot(cwd) {
-  const result = git(["rev-parse", "--show-toplevel"], cwd);
+  const result = runCommand("git", ["rev-parse", "--show-toplevel"], { cwd });
   if (!result.error && result.status === 0 && result.stdout.trim()) {
     return result.stdout.trim();
   }
@@ -20,10 +9,7 @@ export function resolveWorkspaceRoot(cwd) {
 }
 
 export function readGitStatus(cwd) {
-  const result = git(["status", "--short"], cwd);
-  if (result.error?.code === "ETIMEDOUT" || result.signal === "SIGTERM") {
-    return { available: true, short: "(git status timed out)", dirty: true, timedOut: true };
-  }
+  const result = runCommand("git", ["status", "--short"], { cwd });
   if (result.error || result.status !== 0) {
     return { available: false, short: "", dirty: false };
   }
@@ -38,9 +24,9 @@ export function readGitDiff(cwd, { base = null, staged = false } = {}) {
   } else if (base) {
     args.push(`${base}...`);
   }
-  const result = git(args, cwd);
+  const result = runCommand("git", args, { cwd });
   if (result.error || result.status !== 0) {
-    return { available: false, text: result.error?.code === "ETIMEDOUT" ? "(git diff timed out)" : "", command: `git ${args.join(" ")}` };
+    return { available: false, text: "", command: `git ${args.join(" ")}` };
   }
   return { available: true, text: result.stdout, command: `git ${args.join(" ")}` };
 }

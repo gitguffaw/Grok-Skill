@@ -1,16 +1,4 @@
 {
-  "description": "When the host ends a turn, run Grok Router review --panel on a dirty git tree.",
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/stop-review-panel-hook.mjs\"",
-            "timeout": 900
-          }
-        ]
-      }
-    ]
-  }
+  "description": "No Stop hook. Review is an explicit grok-router review --panel call.",
+  "hooks": {}
 }

@@ -74,46 +74,12 @@ export function mergeLaneFindings(lanes) {
       id: lane.id,
       label: lane.label,
       status: lane.status ?? "unknown",
-      result: lane.id ? `grok-router result ${lane.id}` : "not started"
+      result: `grok-router result ${lane.id}`
     }))
   };
-}
-
-export function mergeLaneWork(lanes, mode = "exec") {
-  const failed = lanes.filter((lane) => lane.status && !["completed", "completed-with-warnings"].includes(lane.status));
-  const summary = failed.length
-    ? `${lanes.length} ${mode} lanes (${failed.length} failed).`
-    : `${lanes.length} ${mode} lanes completed.`;
-  return {
-    kind: "work",
-    mode,
-    summary,
-    lanes: lanes.map((lane) => ({
-      id: lane.id,
-      label: lane.label,
-      status: lane.status ?? "unknown",
-      result: lane.id ? `grok-router result ${lane.id}` : "not started",
-      excerpt: String(lane.rendered ?? "").replace(/\s+/g, " ").trim().slice(0, 240)
-    }))
-  };
-}
-
-function renderWorkSynthesis(synthesis) {
-  const lines = [`# Grok ${synthesis.mode} panel`, "", synthesis.summary, ""];
-  for (const lane of synthesis.lanes ?? []) {
-    lines.push(`- ${lane.label}: ${lane.status}: ${lane.result ?? "not started"}`);
-    if (lane.excerpt) {
-      lines.push(`  ${lane.excerpt}`);
-    }
-  }
-  lines.push("", "Full leaf: grok-router result <panel-id> --lane 0");
-  return `${lines.join("\n")}\n`;
 }
 
 export function renderSynthesis(synthesis) {
-  if (synthesis?.kind === "work") {
-    return renderWorkSynthesis(synthesis);
-  }
   const body = JSON.stringify(synthesis, null, 2);
   if (body.length <= MAX_SYNTHESIS_CHARS) {
     return `${body}\n`;
@@ -125,84 +91,4 @@ export function renderSynthesis(synthesis) {
     dropped: (synthesis.dropped ?? 0) + Math.max(0, synthesis.findings.length - 5)
   };
   return `${JSON.stringify(truncated, null, 2)}\n`;
-}
-
-export function plannedLaneLabels(job) {
-  if (Array.isArray(job?.plannedLanes) && job.plannedLanes.length) {
-    return job.plannedLanes.map((item) => (typeof item === "string" ? item : item.label)).filter(Boolean);
-  }
-  if (Array.isArray(job?.lanes) && job.lanes.length && typeof job.lanes[0] === "string") {
-    return job.lanes;
-  }
-  if (Array.isArray(job?.lanes)) {
-    return job.lanes.map((item) => item.label).filter(Boolean);
-  }
-  return [];
-}
-
-export function collectPanelChildren(jobs, parent) {
-  const byParent = jobs.filter((job) => job.parentId === parent.id);
-  if (byParent.length) {
-    return byParent;
-  }
-  const planned = plannedLaneLabels(parent);
-  const created = Date.parse(parent.createdAt ?? "") || 0;
-  return jobs.filter((job) => (
-    job.jobClass === "grok-lane"
-    && planned.includes(job.lane)
-    && (Date.parse(job.createdAt ?? "") || 0) >= created
-  ));
-}
-
-export function synthesizePanelFromChildren(parent, children) {
-  const planned = plannedLaneLabels(parent);
-  const byLane = new Map();
-  for (const child of children) {
-    if (child.lane && !byLane.has(child.lane)) {
-      byLane.set(child.lane, child);
-    }
-  }
-  const leafResults = planned.map((label) => {
-    const child = byLane.get(label);
-    if (!child) {
-      return {
-        id: null,
-        label,
-        status: "not-started",
-        rendered: "",
-        structuredOutput: null,
-        parsedOutput: null
-      };
-    }
-    return {
-      id: child.id,
-      label,
-      status: child.status,
-      rendered: child.rendered,
-      structuredOutput: child.result?.structuredOutput ?? child.structuredOutput ?? null,
-      parsedOutput: child.result?.parsedOutput ?? child.parsedOutput ?? null
-    };
-  });
-  const mode = parent.mode ?? "exec";
-  const synthesis = mode === "review" || mode === "adversarial-review"
-    ? mergeLaneFindings(leafResults)
-    : mergeLaneWork(leafResults, mode);
-  return { leafResults, synthesis, rendered: renderSynthesis(synthesis) };
-}
-
-export function parentStatusFromLanes(laneStates) {
-  const statuses = laneStates.map((lane) => lane.status);
-  if (statuses.some((status) => ["queued", "running"].includes(status))) {
-    return { status: "running", phase: "panel" };
-  }
-  if (statuses.every((status) => status === "completed")) {
-    return { status: "completed", phase: "done" };
-  }
-  if (statuses.every((status) => ["completed", "completed-with-warnings"].includes(status))) {
-    return { status: "completed-with-warnings", phase: "done" };
-  }
-  if (statuses.includes("not-started") || statuses.includes("cancelled") || statuses.includes("interrupted")) {
-    return { status: "failed", phase: "interrupted" };
-  }
-  return { status: "failed", phase: "done" };
 }

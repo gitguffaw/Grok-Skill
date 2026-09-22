@@ -3,7 +3,22 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { spawn, spawnSync } from "node:child_process";
+import { shouldEmitLiveProgress, stripHostNoise } from "../plugins/grok-router/scripts/lib/render.mjs";
 import { COMPANION, makeTempDir, readArgv, testEnv } from "./helpers.mjs";
+
+test("host only hears ready plus blocking startup errors", () => {
+  assert.equal(shouldEmitLiveProgress("Ready to work."), true);
+  assert.equal(shouldEmitLiveProgress("You are not logged in. Run grok login."), true);
+  assert.equal(shouldEmitLiveProgress("2026-09-21T20:17:42Z ERROR authentication required"), true);
+  assert.equal(shouldEmitLiveProgress("MCP server 'fusion' handshake failed: connection closed"), false);
+  assert.equal(shouldEmitLiveProgress("plugin name collision resolved by scope precedence"), false);
+  assert.equal(shouldEmitLiveProgress("grep timed out timeout_secs=20"), false);
+  assert.equal(shouldEmitLiveProgress("Grok pid 70692"), false);
+  assert.equal(
+    stripHostNoise("MCP server init failed\nYou are not logged in\nplugin name collision"),
+    "You are not logged in"
+  );
+});
 
 function runCompanion(args, tempDir, extras = {}) {
   const env = testEnv(tempDir, extras);
@@ -147,22 +162,7 @@ test("setup is ready when fake grok is logged in", () => {
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.ready, true);
   assert.equal(payload.grok.available, true);
-  assert.equal(payload.auth, undefined);
-  assert.equal(payload.reviewGate, undefined);
-  assert.ok(!JSON.stringify(payload).includes("grok login"));
   const dest = path.join(tempDir, "grok-home", "workflows");
   assert.ok(fs.existsSync(path.join(dest, "grok-router-review.rhai")));
   assert.ok(fs.existsSync(path.join(dest, "grok-router-adversarial-review.rhai")));
-});
-
-test("setup is ready without grok login", () => {
-  const tempDir = makeTempDir();
-  const result = runCompanion(["setup", "--json"], tempDir, {
-    XAI_API_KEY: "",
-    GROK_CODE_XAI_API_KEY: ""
-  });
-  assert.equal(result.status, 0, result.stderr);
-  const payload = JSON.parse(result.stdout);
-  assert.equal(payload.ready, true);
-  assert.ok(!(payload.nextSteps || []).some((step) => /login/i.test(step)));
 });

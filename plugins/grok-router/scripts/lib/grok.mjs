@@ -4,6 +4,7 @@ import path from "node:path";
 import { extractVersion } from "./help.mjs";
 import { parseGrokModels } from "./models.mjs";
 import { binaryAvailable, runCommand, runProcess } from "./process.mjs";
+import { stripHostNoise, takeCompleteLines } from "./render.mjs";
 
 export const DEFAULT_MANAGED_TIMEOUT_MS = 30 * 60 * 1000;
 export const READ_ONLY_TOOLS = "read_file,grep,list_dir";
@@ -231,6 +232,7 @@ export async function runGrokPrintJob(cwd, request, options = {}) {
   const args = buildGrokPrintArgs(request);
   const timeoutMs = managedTimeoutMs(options.timeoutMs ?? request.controls?.timeoutMs);
   const invocation = grokInvocation(args, env);
+  let stderrLine = "";
   const result = await runProcess(invocation.command, invocation.args, {
     cwd,
     env,
@@ -238,8 +240,18 @@ export async function runGrokPrintJob(cwd, request, options = {}) {
     detached: options.detached,
     onSpawn: options.onSpawn,
     onStdout: (chunk) => options.onProgress?.({ message: "Grok stdout", logBody: chunk }),
-    onStderr: (chunk) => options.onProgress?.({ message: chunk.trim(), logBody: chunk })
+    onStderr: (chunk) => {
+      options.onProgress?.({ logBody: chunk });
+      const taken = takeCompleteLines(stderrLine, chunk);
+      stderrLine = taken.rest;
+      for (const line of taken.lines) {
+        options.onProgress?.({ message: line });
+      }
+    }
   });
+  if (stderrLine.trim()) {
+    options.onProgress?.({ message: stderrLine });
+  }
   const parsed = parseJsonOrNull(result.stdout?.trim?.() ? result.stdout.trim() : result.stdout);
   const sessionId = extractSessionId(parsed, result.stdout);
   const text = extractGrokText(parsed, result.stdout);
@@ -254,6 +266,7 @@ export async function runGrokPrintJob(cwd, request, options = {}) {
     warnings.push("Read-only Grok route changed git status.");
   }
   const exitStatus = result.error ? 1 : (result.status ?? 1);
+  const hostStderr = stripHostNoise(result.stderr);
   const jobStatus = result.timedOut
     ? "failed"
     : exitStatus === 0
@@ -270,7 +283,6 @@ export async function runGrokPrintJob(cwd, request, options = {}) {
       command: invocation.command,
       args,
       timedOut: Boolean(result.timedOut),
-      timeoutMs,
       signal: result.signal,
       rawOutput: text,
       parsedOutput: parsed,
@@ -281,10 +293,7 @@ export async function runGrokPrintJob(cwd, request, options = {}) {
       gitAfter
     },
     rendered: [
-      text || (result.timedOut
-        ? `Timed out after ${timeoutMs}ms (${Math.round(timeoutMs / 60000)} min). Partial working-tree edits were not reverted.`
-        : (result.stderr || (result.error ? result.error.message : `exit ${exitStatus}`))),
-      result.timedOut && gitAfter?.short ? `\n\ngit status --short:\n${gitAfter.short}` : "",
+      text || hostStderr || (result.error ? result.error.message : `Grok exited ${exitStatus} with no result.`),
       warnings.length ? `\nWarnings:\n${warnings.map((warning) => `- ${warning}`).join("\n")}` : ""
     ].join("").trimEnd(),
     warnings

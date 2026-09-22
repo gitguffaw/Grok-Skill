@@ -13,7 +13,6 @@ export function runCommand(command, args = [], options = {}) {
     input: options.input,
     maxBuffer: options.maxBuffer ?? 20 * 1024 * 1024,
     stdio: options.stdio ?? "pipe",
-    timeout: options.timeoutMs,
     shell: process.platform === "win32" ? (process.env.SHELL || true) : false,
     windowsHide: true
   });

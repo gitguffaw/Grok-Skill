@@ -9,7 +9,6 @@ import { COMPANION, makeTempDir, testEnv } from "./helpers.mjs";
 test("parseLanes uses frozen review template for --panel", () => {
   assert.deepEqual(parseLanes("review", { panel: true }), FROZEN_LANES.review);
   assert.deepEqual(parseLanes("review", { lanes: "a, b" }), ["a", "b"]);
-  assert.deepEqual(parseLanes("exec", { lanes: "login,logout" }), ["login", "logout"]);
   assert.equal(parseLanes("analyze", {}), null);
   assert.throws(() => parseLanes("exec", { panel: true }), /requires explicit --lanes/);
 });
@@ -62,21 +61,6 @@ test("review --panel launches frozen lanes and prints bounded synthesis", () => 
     return fs.existsSync(jobs) ? fs.readdirSync(jobs).filter((name) => name.endsWith(".json")) : [];
   });
   assert.ok(jobsDir.length >= 4, `expected parent+3 leaves, got ${jobsDir.length}`);
-});
-
-test("exec --lanes launches one write grok per named slice", () => {
-  const tempDir = makeTempDir();
-  const result = runCompanion(["exec", "--lanes", "login,logout", "add auth"], tempDir);
-  assert.equal(result.status, 0, result.stderr + result.stdout);
-  assert.match(result.stderr, /# Grok exec panel Started/);
-  assert.match(result.stderr, /Lane login:/);
-  assert.match(result.stderr, /Lane logout:/);
-  assert.match(result.stdout, /2 exec lanes completed/);
-  assert.match(result.stdout, /- login:/);
-  assert.match(result.stdout, /- logout:/);
-  const recorded = JSON.parse(fs.readFileSync(path.join(tempDir, "argv.json"), "utf8"));
-  assert.ok(recorded.argv.includes("--always-approve"));
-  assert.ok(recorded.argv.includes("--no-subagents"));
 });
 
 test("nested companion fan-out is refused", () => {

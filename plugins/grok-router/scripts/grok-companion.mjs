@@ -7,10 +7,10 @@ import { fileURLToPath } from "node:url";
 import { hasLeadingHelpFlag, parseArgs, splitRawArgumentString } from "./lib/args.mjs";
 import { createContextPack } from "./lib/context-pack.mjs";
 import {
+  getGrokAuthStatus,
   getGrokAvailability,
   grokHome,
   grokInvocation,
-  managedTimeoutMs,
   readGrokHelp,
   readGrokInspect,
   readGrokModels,
@@ -32,7 +32,7 @@ import {
   waitForJob
 } from "./lib/jobs.mjs";
 import { renderModelCatalog } from "./lib/models.mjs";
-import { binaryAvailable, currentProcessRecord, runCommand, runProcess, spawnDetached } from "./lib/process.mjs";
+import { binaryAvailable, runCommand, runProcess, spawnDetached } from "./lib/process.mjs";
 import {
   emitJobStarted,
   emitLiveProgress,
@@ -44,9 +44,9 @@ import {
   renderStoredJobResult,
   renderSurface
 } from "./lib/render.mjs";
-import { mergeLaneFindings, mergeLaneWork, parseLanes, parentStatusFromLanes, renderSynthesis } from "./lib/panel.mjs";
+import { mergeLaneFindings, parseLanes, renderSynthesis } from "./lib/panel.mjs";
 import { buildRouterRequest } from "./lib/router.mjs";
-import { generateJobId, readJobFile, resolveJobsDir, saveJob } from "./lib/state.mjs";
+import { generateJobId, getConfig, readJobFile, resolveJobsDir, saveJob, setConfig } from "./lib/state.mjs";
 import { readGitDiff, readGitStatus, resolveWorkspaceRoot } from "./lib/workspace.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
@@ -88,7 +88,9 @@ const ROUTER_PARSE_SEED = {
     "fresh",
     "resume-last",
     "allow-mutating",
-    "allow-dangerous"
+    "allow-dangerous",
+    "enable-review-gate",
+    "disable-review-gate"
   ],
   arrayOptions: ["tool"],
   aliasMap: { m: "model", C: "cwd", h: "help" },
@@ -157,22 +159,18 @@ function discoverRoutedSurface(cwd = process.cwd(), env = process.env) {
 }
 
 function parseRoutedInput(argv, nativeControls) {
-  const valueOwned = new Set(ROUTER_PARSE_SEED.valueOptions);
   const liveConfig = liveControlParseConfig([
     ...nativeControls,
     ...[...ROUTER_OWNED_OPTIONS].map((option) => ({
       option,
       optionAliases: [],
-      kind: valueOwned.has(option) ? "value" : "boolean",
+      kind: ["cwd", "model", "effort", "timeout-ms", "base", "scope", "tool", "resume"].includes(option) ? "value" : "boolean",
       repeatable: option === "tool"
     }))
   ]);
-  const valueOptions = unique([...liveConfig.valueOptions, ...ROUTER_PARSE_SEED.valueOptions]);
-  const booleanOptions = unique([...liveConfig.booleanOptions, ...ROUTER_PARSE_SEED.booleanOptions])
-    .filter((option) => !valueOptions.includes(option));
   return parseCommandInput(argv, {
-    valueOptions,
-    booleanOptions,
+    valueOptions: unique([...liveConfig.valueOptions, ...ROUTER_PARSE_SEED.valueOptions]),
+    booleanOptions: unique([...liveConfig.booleanOptions, ...ROUTER_PARSE_SEED.booleanOptions]),
     optionalValueOptions: liveConfig.optionalValueOptions,
     arrayOptions: unique([...(liveConfig.repeatableOptions ?? []), "tool"]),
     aliasMap: { ...liveConfig.aliasMap, ...ROUTER_PARSE_SEED.aliasMap }
@@ -192,7 +190,7 @@ function routerHelpPayload() {
       "--model and --effort are opaque live values. --best selects the live default from grok models.",
       "analyze/review are read-only (--tools read_file,grep,list_dir). exec uses --always-approve.",
       "--lean is a router-owned context diet (not a grok flag). Opt-in. House AGENTS.md may still inject via prompt_context. --full restores 0.1.0 behavior. --search with --lean keeps web tools.",
-      "Multiple Groks: exec --lanes login,billing,tests runs one write Grok per name (same overall prompt, each covers one slice). analyze --lanes works the same, read-only. review --panel is the frozen three-Grok review. They run one after another, max 8. Full leaf: result <id> --lane k. --panel on exec is invalid; name the slices with --lanes.",
+      "Fan-out: --lanes a,b,c or review --panel launches N grok -p --no-subagents leaves. The companion merges json-schema findings. Full leaf text: result <id> --lane k. Do not spawn_subagent in the lead. Claude and Codex only. Do not install this plugin into Grok.",
       "Foreground is the default. Job ID and progress print on stderr as soon as the job is queued. stdout is the finished result. --background detaches a tracked worker. --wait is only valid on status.",
       "New Grok flags appear on surface as safe-forward or cli-only. Use cli for unmodeled subcommands."
     ]
@@ -201,13 +199,13 @@ function routerHelpPayload() {
 
 function commandSummary(name) {
   return {
-    setup: "Check grok on PATH. Does not log you in. Stop hook is review --panel on a dirty tree.",
+    setup: "Check grok, auth, and optional review gate",
     models: "Live grok models catalog",
     surface: "Installed CLI version, help, and router coverage",
     help: "Router help, or grok <path> --help",
     version: "Router and grok versions",
     analyze: "Read-only analysis",
-    exec: "Write-capable. --lanes a,b,c runs one Grok per named slice.",
+    exec: "Write-capable implementation",
     review: "Findings-only review of a git diff",
     "adversarial-review": "Steerable challenge review",
     rescue: "Tracked investigate/fix with session resume",
@@ -254,28 +252,44 @@ function installWorkflows(env = process.env) {
 async function handleSetup(argv) {
   const { options } = parseCommandInput(argv, { stopAtPositional: true });
   const cwd = resolveCwd(options);
+  if (options["enable-review-gate"]) {
+    setConfig(cwd, { stopReviewGate: true });
+  }
+  if (options["disable-review-gate"]) {
+    setConfig(cwd, { stopReviewGate: false });
+  }
   const node = binaryAvailable("node", ["--version"], { cwd });
   const grok = getGrokAvailability(cwd);
+  const auth = grok.available ? getGrokAuthStatus(cwd) : { loggedIn: false, detail: "grok unavailable" };
   const inspect = grok.available ? readGrokInspect(cwd) : { ok: false, parsed: null, detail: "grok unavailable" };
   const load = inspect.ok ? summarizeInspect(inspect.parsed) : null;
+  const config = getConfig(cwd);
   const nextSteps = [];
   if (!grok.available) {
     nextSteps.push("Install Grok CLI from https://x.ai/cli and put `grok` on PATH.");
   }
+  if (grok.available && !auth.loggedIn) {
+    nextSteps.push("Run `grok login`. If the browser is blocked, use `grok login --device-auth` or set XAI_API_KEY.");
+  }
   const workflows = installWorkflows();
+  if (!config.stopReviewGate) {
+    nextSteps.push("Optional: grok-router setup --enable-review-gate");
+  }
   if (workflows.copied.length) {
     nextSteps.push(`Grok TUI: /workflow grok-router-review (copied ${workflows.copied.join(", ")} to ${workflows.dest}).`);
   }
   const report = {
-    ready: node.available && grok.available,
+    ready: node.available && grok.available && auth.loggedIn,
     node,
     grok,
+    auth,
     inspect: {
       ok: inspect.ok,
       detail: inspect.ok ? inspect.parsed?.grokVersion : (inspect.raw || inspect.result?.stderr || "failed")
     },
     load,
     workflows,
+    reviewGate: { enabled: Boolean(config.stopReviewGate) },
     nextSteps
   };
   output(options.json ? report : renderSetupReport(report), Boolean(options.json));
@@ -398,7 +412,7 @@ async function runStoredJob(workspaceRoot, jobId, options = {}) {
   return runTrackedJob(stored, async (hooks) => {
     appendLogLine(stored.logFile, `Invoking Grok ${stored.mode}.`);
     if (live) {
-      emitLiveProgress(`Invoking Grok ${stored.kindLabel ?? stored.mode}.`);
+      emitLiveProgress("Ready to work.");
     }
     return runGrokPrintJob(workspaceRoot, stored.request, {
       env,
@@ -406,17 +420,16 @@ async function runStoredJob(workspaceRoot, jobId, options = {}) {
       timeoutMs: stored.request.controls?.timeoutMs,
       readGitStatus: () => readGitStatus(workspaceRoot),
       onProgress: (event) => {
-        appendLogLine(stored.logFile, event.logBody ?? event.message);
-        if (live) {
+        if (event.logBody != null) {
+          appendLogLine(stored.logFile, event.logBody);
+        }
+        if (live && event.message) {
           emitLiveProgress(event.message);
         }
       },
       onSpawn: options.backgroundWorker
         ? undefined
         : (processRecord) => {
-          if (live && Number.isFinite(processRecord?.pid)) {
-            emitLiveProgress(`Grok pid ${processRecord.pid}`);
-          }
           hooks.updateProcess(processRecord);
         }
     });
@@ -501,7 +514,6 @@ async function runRouted(mode, { options, positionals }, { nativeControls } = {}
     request,
     contextPack,
     logFile,
-    timeoutMs: managedTimeoutMs(request.controls?.timeoutMs),
     createdAt: new Date().toISOString()
   }, env);
 
@@ -534,7 +546,7 @@ async function runRouted(mode, { options, positionals }, { nativeControls } = {}
   }
 }
 
-async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env, workspaceRoot, models, version, gitBefore, diff, parentId }) {
+async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env, workspaceRoot, models, version, gitBefore, diff }) {
   const request = buildRouterRequest({
     mode,
     prompt,
@@ -559,7 +571,6 @@ async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env,
     kindLabel: `${request.workflow} (${lane})`,
     mode,
     lane,
-    parentId: parentId ?? null,
     title: lane,
     summary: lane,
     workspaceRoot,
@@ -569,7 +580,6 @@ async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env,
     request,
     contextPack,
     logFile,
-    timeoutMs: managedTimeoutMs(request.controls?.timeoutMs),
     createdAt: new Date().toISOString()
   }, env);
   emitLiveProgress(`Lane ${lane}: ${jobId}`);
@@ -584,31 +594,6 @@ async function launchLeafJob(mode, { options, prompt, lane, nativeControls, env,
   };
 }
 
-function persistPanel(workspaceRoot, parent, leafResults, env, extra = {}) {
-  const synthesis = parent.mode === "review" || parent.mode === "adversarial-review"
-    ? mergeLaneFindings(leafResults)
-    : mergeLaneWork(leafResults, parent.mode);
-  const rendered = renderSynthesis(synthesis);
-  const outcome = extra.status
-    ? { status: extra.status, phase: extra.phase ?? extra.status }
-    : parentStatusFromLanes(leafResults);
-  const terminal = !["queued", "running"].includes(outcome.status);
-  return saveJob(workspaceRoot, {
-    ...parent,
-    ...extra,
-    status: outcome.status,
-    phase: outcome.phase,
-    summary: synthesis.summary,
-    plannedLanes: parent.plannedLanes ?? parent.lanes,
-    lanes: synthesis.lanes,
-    childIds: leafResults.map((lane) => lane.id).filter(Boolean),
-    synthesis,
-    rendered,
-    logFile: parent.logFile,
-    completedAt: terminal ? new Date().toISOString() : null
-  }, env);
-}
-
 async function runPanel(mode, { options, prompt, lanes, nativeControls, cwd, env, workspaceRoot }) {
   const models = readGrokModels(cwd, env);
   const version = readGrokVersion(cwd, env);
@@ -619,9 +604,7 @@ async function runPanel(mode, { options, prompt, lanes, nativeControls, cwd, env
   }
   const parentId = generateJobId(`${mode}-panel`);
   const logFile = createJobLogFile(workspaceRoot, parentId, `Grok ${mode} panel`, env);
-  const controller = currentProcessRecord();
-  const timeoutMs = managedTimeoutMs(options["timeout-ms"]);
-  let parent = saveJob(workspaceRoot, {
+  saveJob(workspaceRoot, {
     id: parentId,
     jobClass: "grok-panel",
     kindLabel: `${mode} panel`,
@@ -631,14 +614,9 @@ async function runPanel(mode, { options, prompt, lanes, nativeControls, cwd, env
     workspaceRoot,
     status: "running",
     phase: "panel",
-    plannedLanes: lanes,
-    lanes: lanes.map((label) => ({ label, id: null, status: "queued", result: "not started" })),
-    childIds: [],
-    write: mode === "exec",
+    lanes,
+    write: false,
     logFile,
-    timeoutMs,
-    companionPid: controller.pid,
-    companionProcessStartTime: controller.processStartTime,
     createdAt: new Date().toISOString()
   }, env);
   emitJobStarted({
@@ -646,57 +624,47 @@ async function runPanel(mode, { options, prompt, lanes, nativeControls, cwd, env
     kindLabel: `${mode} panel`,
     status: "running"
   });
-  const leafResults = lanes.map((label) => ({
-    id: null,
-    label,
-    status: "queued",
-    structuredOutput: null,
-    parsedOutput: null,
-    rendered: ""
-  }));
-  try {
-    for (let index = 0; index < lanes.length; index += 1) {
-      const lane = lanes[index];
-      appendLogLine(logFile, `Lane ${lane}`);
-      leafResults[index] = { ...leafResults[index], status: "running" };
-      parent = persistPanel(workspaceRoot, parent, leafResults, env);
-      const finished = await launchLeafJob(mode, {
-        options,
-        prompt,
-        lane,
-        nativeControls,
-        env,
-        workspaceRoot,
-        models,
-        version,
-        gitBefore,
-        diff,
-        parentId
-      });
-      leafResults[index] = finished;
-      parent = persistPanel(workspaceRoot, parent, leafResults, env);
-    }
-    parent = persistPanel(workspaceRoot, parent, leafResults, env);
-  } catch (error) {
-    appendLogLine(logFile, error instanceof Error ? error.stack || error.message : String(error));
-    for (const leaf of leafResults) {
-      if (leaf.status === "queued" || (leaf.status === "running" && !leaf.id)) {
-        leaf.status = "not-started";
-      }
-    }
-    parent = persistPanel(workspaceRoot, parent, leafResults, env, {
-      result: { error: error instanceof Error ? error.message : String(error) }
-    });
-    throw error;
+  const leafResults = [];
+  for (const lane of lanes) {
+    appendLogLine(logFile, `Lane ${lane}`);
+    leafResults.push(await launchLeafJob(mode, {
+      options,
+      prompt,
+      lane,
+      nativeControls,
+      env,
+      workspaceRoot,
+      models,
+      version,
+      gitBefore,
+      diff
+    }));
   }
+  const synthesis = mergeLaneFindings(leafResults);
+  const rendered = renderSynthesis(synthesis);
+  const parent = saveJob(workspaceRoot, {
+    id: parentId,
+    jobClass: "grok-panel",
+    kindLabel: `${mode} panel`,
+    mode,
+    title: lanes.join(", ").slice(0, 96),
+    summary: synthesis.summary,
+    workspaceRoot,
+    status: leafResults.every((lane) => ["completed", "completed-with-warnings"].includes(lane.status))
+      ? "completed"
+      : "completed-with-warnings",
+    phase: "done",
+    lanes: synthesis.lanes,
+    synthesis,
+    rendered,
+    logFile,
+    completedAt: new Date().toISOString()
+  }, env);
   if (options.json) {
     output(parent, true);
     return;
   }
-  process.stdout.write(parent.rendered?.endsWith("\n") ? parent.rendered : `${parent.rendered ?? ""}\n`);
-  if (parent.status && !["completed", "completed-with-warnings"].includes(parent.status)) {
-    process.exitCode = 1;
-  }
+  process.stdout.write(rendered);
 }
 
 async function handleStatus(argv) {

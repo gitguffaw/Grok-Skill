@@ -1,24 +1,23 @@
 #!/usr/bin/env node
 
-import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { discoverGrokControls, schemaForLiveControl } from "./lib/live-controls.mjs";
 import { readGrokHelp } from "./lib/grok.mjs";
+import { stripHostNoise } from "./lib/render.mjs";
 
 const ROOT = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const COMPANION = path.join(ROOT, "scripts", "grok-companion.mjs");
-const PLUGIN_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, "plugin.json"), "utf8")).version;
 
 const MANAGED = [
-  { name: "grok_router_setup", command: "setup", description: "Check grok on PATH. The router does not log you in." },
+  { name: "grok_router_setup", command: "setup", description: "Check grok binary, auth, and review-gate configuration." },
   { name: "grok_router_models", command: "models", description: "Live grok models catalog." },
   { name: "grok_router_surface", command: "surface", description: "Installed grok help and router coverage." },
   { name: "grok_router_help", command: "help", description: "Router help or grok <path> --help." },
   { name: "grok_router_analyze", command: "analyze", description: "Read-only Grok analysis." },
-  { name: "grok_router_exec", command: "exec", description: "Write-capable Grok implementation. Pass lanes as a comma-separated list to run one Grok per named slice (exec --lanes login,billing,tests). Not --panel." },
+  { name: "grok_router_exec", command: "exec", description: "Write-capable Grok implementation." },
   { name: "grok_router_review", command: "review", description: "Findings-only Grok review of a git diff." },
   { name: "grok_router_adversarial_review", command: "adversarial-review", description: "Steerable challenge review." },
   { name: "grok_router_rescue", command: "rescue", description: "Tracked investigate/fix with session resume." },
@@ -39,9 +38,7 @@ function staticProperties() {
     full: { type: "boolean", description: "Disable --lean and restore 0.1.0 ambient behavior." },
     search: { type: "boolean" },
     docs: { type: "boolean" },
-    parallel: { type: "boolean", description: "Review only: same as --panel (three frozen review Groks). For exec, use lanes." },
-    panel: { type: "boolean", description: "Review only: three frozen review Groks. Invalid on exec." },
-    lanes: { type: "string", description: "Comma-separated slices. exec --lanes login,billing,tests runs one write Grok per name." },
+    parallel: { type: "boolean" },
     tool: { type: "string" },
     base: { type: "string", description: "Git base ref for review." },
     json: { type: "boolean" },
@@ -130,7 +127,7 @@ async function handle(message) {
     reply(id, {
       protocolVersion: params?.protocolVersion ?? "2024-11-05",
       capabilities: { tools: {} },
-      serverInfo: { name: "grok-router", version: PLUGIN_VERSION }
+      serverInfo: { name: "grok-router", version: "0.1.0" }
     });
     return;
   }
@@ -149,7 +146,7 @@ async function handle(message) {
       return;
     }
     const result = await runCompanion(tool.command, params?.arguments ?? {});
-    const text = (result.stdout || result.stderr || `exit ${result.status}`).trim();
+    const text = (result.stdout || stripHostNoise(result.stderr) || `exit ${result.status}`).trim();
     reply(id, {
       content: [{ type: "text", text }],
       isError: result.status !== 0

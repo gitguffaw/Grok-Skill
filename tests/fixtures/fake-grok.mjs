@@ -65,6 +65,20 @@ if (promptIndex !== -1 || promptFileIndex !== -1) {
     process.stderr.write("fake grok working\n");
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, sleepMs);
   }
+  if (process.env.GROK_FAKE_NOISE === "1") {
+    process.stderr.write("2026-09-21T20:17:42.994757Z WARN plugin name ");
+    process.stderr.write("collision resolved by scope precedence\n");
+    process.stderr.write("MCP server 'fusion' handshake failed: connection closed\n");
+    process.stderr.write("MCP server 'grok-router' handshake failed: connection closed: initialize response\n");
+    process.stderr.write("skill name does not match expected name from path\n");
+    process.stderr.write("grep timed out timeout_secs=20\n");
+    process.stderr.write("grep timed out timeout_secs=20\n");
+  }
+  if (process.env.GROK_FAKE_AUTH === "1") {
+    process.stderr.write("MCP server 'fusion' handshake failed: connection closed\n");
+    process.stderr.write("You are not logged in. Run grok login.\n");
+    process.exit(1);
+  }
   const prompt = promptIndex !== -1
     ? argv[promptIndex + 1]
     : fs.readFileSync(argv[promptFileIndex + 1], "utf8");
