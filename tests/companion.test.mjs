@@ -189,3 +189,15 @@ for (const laneArgs of [["--lanes", "ticket6,ticket8"], ["--lanes=ticket6,ticket
     }
   });
 }
+
+for (const resumeFlag of ["--resume", "-r"]) {
+  test(`exec ${resumeFlag} forwards a named session exactly once`, () => {
+    const tempDir = makeTempDir();
+    const session = "11111111-1111-4111-8111-111111111111";
+    const result = runCompanion(["exec", resumeFlag, session, "Continue the requested fix."], tempDir);
+    assert.equal(result.status, 0, result.stderr + result.stdout);
+    const { argv } = readArgv(tempDir);
+    assert.equal(argv.filter((arg) => arg === "--resume").length, 1);
+    assert.equal(argv[argv.indexOf("--resume") + 1], session);
+  });
+}
